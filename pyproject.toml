@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vnthuquan-hoanganhduc"
+version = "0.1.0"
+authors = [
+  { name = "Duc A. Hoang (hoanganhduc)", email = "anhduc.hoang1990@gmail.com" },
+]
+description = "Python wrapper and CLI for Vietnam Thu Quan ebook discovery and EPUB downloads"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "requests>=2.32,<3.0",
+  "beautifulsoup4>=4.13,<5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "build>=1.2",
+]
+docs = [
+  "sphinx>=7.3,<8.0",
+  "myst-parser>=3.0",
+  "sphinx-rtd-theme>=3.0",
+  "sphinx-autodoc-typehints>=2.2",
+]
+
+[project.scripts]
+vnthuquan = "vnthuquan:main"
+
+[project.urls]
+Homepage = "https://github.com/hoanganhduc/vnthuquan"
+Issues = "https://github.com/hoanganhduc/vnthuquan/issues"
+
+[tool.setuptools.packages.find]
+include = ["vnthuquan*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

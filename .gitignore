@@ -1,0 +1,19 @@
+# Python/package artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Test and docs build artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+docs/_build/
+
+# Local environments and machine-specific state
+.venv/
+venv/
+.env
+.env.*
+.learnings/

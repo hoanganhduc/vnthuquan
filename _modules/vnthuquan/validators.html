@@ -1,0 +1,576 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vnthuquan.validators &mdash; vnthuquan 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=01f34227"></script>
+      <script src="../../_static/doctools.js?v=9a2dae69"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            vnthuquan
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../usage.html">Usage Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../cli_reference.html">CLI Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../validation.html">Validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../mirrors.html">Mirrors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../categories.html">Categories And Formats</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../listing.html">Listing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_reference.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project_documentation.html">Project Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project_documentation.html#vnthuquan-project-documentation">vnthuquan Project Documentation</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">vnthuquan</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">vnthuquan.validators</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for vnthuquan.validators</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;File validators for downloaded assets.&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">html</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">urllib.parse</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">zipfile</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">xml.etree.ElementTree</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">ET</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValidationResult</span>
+
+<span class="n">EPUB_MIMETYPE</span> <span class="o">=</span> <span class="s2">&quot;application/epub+zip&quot;</span>
+<span class="n">PDF_HEADER</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;%PDF-&quot;</span>
+<span class="n">MP3_EXTENSIONS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;.mp3&quot;</span><span class="p">}</span>
+<span class="n">DEMO_MARKER_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+    <span class="sa">r</span><span class="s2">&quot;(demo|sample|preview|trich doan|trích đoạn|xem thu|xem thử)&quot;</span><span class="p">,</span>
+    <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="sha256_file">
+<a class="viewcode-back" href="../../api_reference.html#vnthuquan.validators.sha256_file">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sha256_file</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="n">digest</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">()</span>
+    <span class="k">with</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">handle</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="nb">iter</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="n">handle</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">1024</span> <span class="o">*</span> <span class="mi">1024</span><span class="p">),</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+            <span class="n">digest</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">digest</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_read_xml</span><span class="p">(</span><span class="n">zf</span><span class="p">:</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ET</span><span class="o">.</span><span class="n">Element</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">ET</span><span class="o">.</span><span class="n">fromstring</span><span class="p">(</span><span class="n">zf</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+
+
+<div class="viewcode-block" id="validate_epub">
+<a class="viewcode-back" href="../../api_reference.html#vnthuquan.validators.validate_epub">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_epub</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span> <span class="n">expected_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ValidationResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate EPUB transfer and package structure.&quot;&quot;&quot;</span>
+
+    <span class="n">epub_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">errors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">warnings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">size</span> <span class="o">=</span> <span class="n">epub_path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="k">if</span> <span class="n">epub_path</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">digest</span> <span class="o">=</span> <span class="n">sha256_file</span><span class="p">(</span><span class="n">epub_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">epub_path</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">transfer_complete</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">expected_size</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">size</span> <span class="o">==</span> <span class="n">expected_size</span>
+    <span class="k">if</span> <span class="n">expected_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">size</span> <span class="o">!=</span> <span class="n">expected_size</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;byte count mismatch: expected </span><span class="si">{</span><span class="n">expected_size</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">file_type_valid</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">container_valid</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">content_readable</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">demo_suspected</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">metadata_title</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">metadata_creator</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">manifest_items</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">spine_items_count</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">toc_items</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">nav_items</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">spine_text_chars</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">epub_path</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
+            <span class="n">bad_member</span> <span class="o">=</span> <span class="n">zf</span><span class="o">.</span><span class="n">testzip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">bad_member</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ZIP integrity failed at </span><span class="si">{</span><span class="n">bad_member</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">zf</span><span class="o">.</span><span class="n">namelist</span><span class="p">())</span>
+            <span class="k">if</span> <span class="s2">&quot;mimetype&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;missing mimetype&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">mimetype</span> <span class="o">=</span> <span class="n">zf</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">&quot;mimetype&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;replace&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                <span class="n">file_type_valid</span> <span class="o">=</span> <span class="n">mimetype</span> <span class="o">==</span> <span class="n">EPUB_MIMETYPE</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">file_type_valid</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;unexpected EPUB mimetype: </span><span class="si">{</span><span class="n">mimetype</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="s2">&quot;META-INF/container.xml&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;missing META-INF/container.xml&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">container</span> <span class="o">=</span> <span class="n">_read_xml</span><span class="p">(</span><span class="n">zf</span><span class="p">,</span> <span class="s2">&quot;META-INF/container.xml&quot;</span><span class="p">)</span>
+                <span class="n">ns_container</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;c&quot;</span><span class="p">:</span> <span class="s2">&quot;urn:oasis:names:tc:opendocument:xmlns:container&quot;</span><span class="p">}</span>
+                <span class="n">rootfile</span> <span class="o">=</span> <span class="n">container</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;.//c:rootfile&quot;</span><span class="p">,</span> <span class="n">ns_container</span><span class="p">)</span>
+                <span class="n">opf_path</span> <span class="o">=</span> <span class="n">rootfile</span><span class="o">.</span><span class="n">attrib</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full-path&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">rootfile</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">opf_path</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;container.xml has no rootfile&quot;</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">opf_path</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;OPF package not found: </span><span class="si">{</span><span class="n">opf_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">container_valid</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="n">opf_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">opf_path</span><span class="p">)</span>
+                    <span class="n">opf</span> <span class="o">=</span> <span class="n">_read_xml</span><span class="p">(</span><span class="n">zf</span><span class="p">,</span> <span class="n">opf_path</span><span class="p">)</span>
+                    <span class="n">ns_opf</span> <span class="o">=</span> <span class="p">{</span>
+                        <span class="s2">&quot;opf&quot;</span><span class="p">:</span> <span class="s2">&quot;http://www.idpf.org/2007/opf&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;dc&quot;</span><span class="p">:</span> <span class="s2">&quot;http://purl.org/dc/elements/1.1/&quot;</span><span class="p">,</span>
+                    <span class="p">}</span>
+                    <span class="n">title_elem</span> <span class="o">=</span> <span class="n">opf</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;.//dc:title&quot;</span><span class="p">,</span> <span class="n">ns_opf</span><span class="p">)</span>
+                    <span class="n">creator_elem</span> <span class="o">=</span> <span class="n">opf</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">&quot;.//dc:creator&quot;</span><span class="p">,</span> <span class="n">ns_opf</span><span class="p">)</span>
+                    <span class="n">metadata_title</span> <span class="o">=</span> <span class="n">title_elem</span><span class="o">.</span><span class="n">text</span> <span class="k">if</span> <span class="n">title_elem</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+                    <span class="n">metadata_creator</span> <span class="o">=</span> <span class="n">creator_elem</span><span class="o">.</span><span class="n">text</span> <span class="k">if</span> <span class="n">creator_elem</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+
+                    <span class="n">manifest</span> <span class="o">=</span> <span class="p">{</span>
+                        <span class="n">item</span><span class="o">.</span><span class="n">attrib</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">):</span> <span class="n">item</span><span class="o">.</span><span class="n">attrib</span>
+                        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">opf</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s2">&quot;.//opf:manifest/opf:item&quot;</span><span class="p">,</span> <span class="n">ns_opf</span><span class="p">)</span>
+                    <span class="p">}</span>
+                    <span class="n">manifest_items</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">manifest</span><span class="p">)</span>
+                    <span class="n">spine_ids</span> <span class="o">=</span> <span class="p">[</span>
+                        <span class="n">item</span><span class="o">.</span><span class="n">attrib</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;idref&quot;</span><span class="p">)</span>
+                        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">opf</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="s2">&quot;.//opf:spine/opf:itemref&quot;</span><span class="p">,</span> <span class="n">ns_opf</span><span class="p">)</span>
+                    <span class="p">]</span>
+                    <span class="n">spine_items_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">spine_ids</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">spine_ids</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;EPUB spine is empty&quot;</span><span class="p">)</span>
+
+                    <span class="n">missing_manifest_refs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="n">missing_files</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="n">demo_hits</span> <span class="o">=</span> <span class="mi">0</span>
+                    <span class="n">readable_docs</span> <span class="o">=</span> <span class="mi">0</span>
+                    <span class="k">for</span> <span class="n">attrs</span> <span class="ow">in</span> <span class="n">manifest</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                        <span class="k">if</span> <span class="s2">&quot;nav&quot;</span> <span class="ow">in</span> <span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;properties&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+                            <span class="n">nav_items</span> <span class="o">+=</span> <span class="mi">1</span>
+                        <span class="k">if</span> <span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;media-type&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;application/x-dtbncx+xml&quot;</span><span class="p">:</span>
+                            <span class="n">toc_items</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                    <span class="k">for</span> <span class="n">idref</span> <span class="ow">in</span> <span class="n">spine_ids</span><span class="p">:</span>
+                        <span class="n">attrs</span> <span class="o">=</span> <span class="n">manifest</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">idref</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="n">attrs</span><span class="p">:</span>
+                            <span class="n">missing_manifest_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">idref</span><span class="p">))</span>
+                            <span class="k">continue</span>
+                        <span class="n">href</span> <span class="o">=</span> <span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;href&quot;</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="n">href</span><span class="p">:</span>
+                            <span class="n">missing_manifest_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">idref</span><span class="p">))</span>
+                            <span class="k">continue</span>
+                        <span class="n">member</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span>
+                            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">opf_dir</span><span class="p">,</span> <span class="n">urllib</span><span class="o">.</span><span class="n">parse</span><span class="o">.</span><span class="n">unquote</span><span class="p">(</span><span class="n">href</span><span class="p">))</span>
+                        <span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\\</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;/&quot;</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">member</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                            <span class="n">missing_files</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">member</span><span class="p">)</span>
+                            <span class="k">continue</span>
+                        <span class="n">ext</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">splitext</span><span class="p">(</span><span class="n">member</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+                        <span class="k">if</span> <span class="n">ext</span> <span class="ow">in</span> <span class="p">{</span><span class="s2">&quot;.xhtml&quot;</span><span class="p">,</span> <span class="s2">&quot;.html&quot;</span><span class="p">,</span> <span class="s2">&quot;.htm&quot;</span><span class="p">}:</span>
+                            <span class="n">data</span> <span class="o">=</span> <span class="n">zf</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">member</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;ignore&quot;</span><span class="p">)</span>
+                            <span class="n">text</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;&lt;[^&gt;]+&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+                            <span class="n">text</span> <span class="o">=</span> <span class="n">html</span><span class="o">.</span><span class="n">unescape</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;\s+&quot;</span><span class="p">,</span> <span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="n">text</span><span class="p">))</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+                            <span class="n">spine_text_chars</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+                            <span class="n">readable_docs</span> <span class="o">+=</span> <span class="mi">1</span>
+                            <span class="k">if</span> <span class="n">DEMO_MARKER_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">text</span><span class="p">[:</span><span class="mi">2000</span><span class="p">])</span> <span class="ow">or</span> <span class="n">DEMO_MARKER_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span>
+                                <span class="n">text</span><span class="p">[</span><span class="o">-</span><span class="mi">2000</span><span class="p">:]</span>
+                            <span class="p">):</span>
+                                <span class="n">demo_hits</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                    <span class="k">if</span> <span class="n">missing_manifest_refs</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;spine references missing manifest items: </span><span class="si">{</span><span class="n">missing_manifest_refs</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">if</span> <span class="n">missing_files</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;spine files missing from archive: </span><span class="si">{</span><span class="n">missing_files</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">toc_items</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">nav_items</span><span class="p">:</span>
+                        <span class="n">warnings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;EPUB has no NCX TOC or nav item&quot;</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">strict</span><span class="p">:</span>
+                            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;EPUB has no NCX TOC or nav item&quot;</span><span class="p">)</span>
+                    <span class="n">content_readable</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">readable_docs</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">missing_files</span>
+                    <span class="n">demo_suspected</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">demo_hits</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">strict</span> <span class="ow">and</span> <span class="n">demo_suspected</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;demo/sample markers found in EPUB text&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">BadZipFile</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;file is not a valid ZIP/EPUB archive&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">ET</span><span class="o">.</span><span class="n">ParseError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;invalid EPUB XML: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;could not read file: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">ok</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="ow">not</span> <span class="n">errors</span>
+        <span class="ow">and</span> <span class="p">(</span><span class="n">transfer_complete</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="n">file_type_valid</span>
+        <span class="ow">and</span> <span class="n">container_valid</span>
+        <span class="ow">and</span> <span class="n">content_readable</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">ValidationResult</span><span class="p">(</span>
+        <span class="n">path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">epub_path</span><span class="p">),</span>
+        <span class="n">ok</span><span class="o">=</span><span class="n">ok</span><span class="p">,</span>
+        <span class="n">transfer_complete</span><span class="o">=</span><span class="n">transfer_complete</span><span class="p">,</span>
+        <span class="n">file_type_valid</span><span class="o">=</span><span class="n">file_type_valid</span><span class="p">,</span>
+        <span class="n">container_valid</span><span class="o">=</span><span class="n">container_valid</span><span class="p">,</span>
+        <span class="n">content_readable</span><span class="o">=</span><span class="n">content_readable</span><span class="p">,</span>
+        <span class="n">demo_suspected</span><span class="o">=</span><span class="n">demo_suspected</span><span class="p">,</span>
+        <span class="n">content_completeness</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+        <span class="n">sha256</span><span class="o">=</span><span class="n">digest</span><span class="p">,</span>
+        <span class="n">size_bytes</span><span class="o">=</span><span class="n">size</span><span class="p">,</span>
+        <span class="n">expected_size_bytes</span><span class="o">=</span><span class="n">expected_size</span><span class="p">,</span>
+        <span class="n">metadata_title</span><span class="o">=</span><span class="n">metadata_title</span><span class="p">,</span>
+        <span class="n">metadata_creator</span><span class="o">=</span><span class="n">metadata_creator</span><span class="p">,</span>
+        <span class="n">manifest_items</span><span class="o">=</span><span class="n">manifest_items</span><span class="p">,</span>
+        <span class="n">spine_items</span><span class="o">=</span><span class="n">spine_items_count</span><span class="p">,</span>
+        <span class="n">toc_items</span><span class="o">=</span><span class="n">toc_items</span><span class="p">,</span>
+        <span class="n">nav_items</span><span class="o">=</span><span class="n">nav_items</span><span class="p">,</span>
+        <span class="n">spine_text_chars_approx</span><span class="o">=</span><span class="n">spine_text_chars</span><span class="p">,</span>
+        <span class="n">warnings</span><span class="o">=</span><span class="n">warnings</span><span class="p">,</span>
+        <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="validate_pdf">
+<a class="viewcode-back" href="../../api_reference.html#vnthuquan.validators.validate_pdf">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_pdf</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span> <span class="n">expected_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ValidationResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate a PDF transfer with lightweight structural checks.&quot;&quot;&quot;</span>
+
+    <span class="n">pdf_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">errors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">warnings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">size</span> <span class="o">=</span> <span class="n">pdf_path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="k">if</span> <span class="n">pdf_path</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">digest</span> <span class="o">=</span> <span class="n">sha256_file</span><span class="p">(</span><span class="n">pdf_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">pdf_path</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">transfer_complete</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">expected_size</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">size</span> <span class="o">==</span> <span class="n">expected_size</span>
+    <span class="k">if</span> <span class="n">expected_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">size</span> <span class="o">!=</span> <span class="n">expected_size</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;byte count mismatch: expected </span><span class="si">{</span><span class="n">expected_size</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">file_type_valid</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">container_valid</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">content_readable</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">pdf_path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">handle</span><span class="p">:</span>
+            <span class="n">head</span> <span class="o">=</span> <span class="n">handle</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">head</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">PDF_HEADER</span><span class="p">):</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;missing PDF header&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">file_type_valid</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">if</span> <span class="n">size</span> <span class="ow">and</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">handle</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">size</span> <span class="o">-</span> <span class="mi">4096</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+                <span class="n">tail</span> <span class="o">=</span> <span class="n">handle</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">tail</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span>
+        <span class="n">container_valid</span> <span class="o">=</span> <span class="n">file_type_valid</span> <span class="ow">and</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="si">%%</span><span class="s2">EOF&quot;</span> <span class="ow">in</span> <span class="n">tail</span>
+        <span class="k">if</span> <span class="n">file_type_valid</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">container_valid</span><span class="p">:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;PDF EOF marker was not found near end of file&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">strict</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;PDF EOF marker was not found near end of file&quot;</span><span class="p">)</span>
+        <span class="n">content_readable</span> <span class="o">=</span> <span class="n">file_type_valid</span> <span class="ow">and</span> <span class="nb">bool</span><span class="p">(</span><span class="n">size</span> <span class="ow">and</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="mi">1024</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;could not read file: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">ValidationResult</span><span class="p">(</span>
+        <span class="n">path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">pdf_path</span><span class="p">),</span>
+        <span class="n">ok</span><span class="o">=</span><span class="ow">not</span> <span class="n">errors</span> <span class="ow">and</span> <span class="p">(</span><span class="n">transfer_complete</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="n">file_type_valid</span> <span class="ow">and</span> <span class="n">content_readable</span><span class="p">,</span>
+        <span class="n">transfer_complete</span><span class="o">=</span><span class="n">transfer_complete</span><span class="p">,</span>
+        <span class="n">file_type_valid</span><span class="o">=</span><span class="n">file_type_valid</span><span class="p">,</span>
+        <span class="n">container_valid</span><span class="o">=</span><span class="n">container_valid</span><span class="p">,</span>
+        <span class="n">content_readable</span><span class="o">=</span><span class="n">content_readable</span><span class="p">,</span>
+        <span class="n">demo_suspected</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">content_completeness</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+        <span class="n">sha256</span><span class="o">=</span><span class="n">digest</span><span class="p">,</span>
+        <span class="n">size_bytes</span><span class="o">=</span><span class="n">size</span><span class="p">,</span>
+        <span class="n">expected_size_bytes</span><span class="o">=</span><span class="n">expected_size</span><span class="p">,</span>
+        <span class="n">warnings</span><span class="o">=</span><span class="n">warnings</span><span class="p">,</span>
+        <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="validate_text">
+<a class="viewcode-back" href="../../api_reference.html#vnthuquan.validators.validate_text">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_text</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span> <span class="n">expected_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ValidationResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate a generated UTF-8 text export.&quot;&quot;&quot;</span>
+
+    <span class="n">text_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">errors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">warnings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">size</span> <span class="o">=</span> <span class="n">text_path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="k">if</span> <span class="n">text_path</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">digest</span> <span class="o">=</span> <span class="n">sha256_file</span><span class="p">(</span><span class="n">text_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">text_path</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">transfer_complete</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">expected_size</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">size</span> <span class="o">==</span> <span class="n">expected_size</span>
+    <span class="k">if</span> <span class="n">expected_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">size</span> <span class="o">!=</span> <span class="n">expected_size</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;byte count mismatch: expected </span><span class="si">{</span><span class="n">expected_size</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">text</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="n">text_path</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">UnicodeDecodeError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;text is not valid UTF-8: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;could not read file: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">stripped</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">file_type_valid</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">stripped</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">errors</span>
+    <span class="n">content_readable</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">stripped</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">200</span>
+    <span class="k">if</span> <span class="n">file_type_valid</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">content_readable</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;text export is very short&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="s2">&quot;&lt;html&quot;</span> <span class="ow">in</span> <span class="n">stripped</span><span class="p">[:</span><span class="mi">1000</span><span class="p">]</span><span class="o">.</span><span class="n">casefold</span><span class="p">():</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;text export appears to contain HTML markup&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">strict</span><span class="p">:</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;text export appears to contain HTML markup&quot;</span><span class="p">)</span>
+    <span class="n">demo_suspected</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">DEMO_MARKER_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">stripped</span><span class="p">[:</span><span class="mi">2000</span><span class="p">]))</span> <span class="k">if</span> <span class="n">stripped</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">strict</span> <span class="ow">and</span> <span class="n">demo_suspected</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;demo/sample markers found in text export&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">ValidationResult</span><span class="p">(</span>
+        <span class="n">path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">text_path</span><span class="p">),</span>
+        <span class="n">ok</span><span class="o">=</span><span class="ow">not</span> <span class="n">errors</span> <span class="ow">and</span> <span class="p">(</span><span class="n">transfer_complete</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="n">file_type_valid</span> <span class="ow">and</span> <span class="n">content_readable</span><span class="p">,</span>
+        <span class="n">transfer_complete</span><span class="o">=</span><span class="n">transfer_complete</span><span class="p">,</span>
+        <span class="n">file_type_valid</span><span class="o">=</span><span class="n">file_type_valid</span><span class="p">,</span>
+        <span class="n">container_valid</span><span class="o">=</span><span class="n">file_type_valid</span><span class="p">,</span>
+        <span class="n">content_readable</span><span class="o">=</span><span class="n">content_readable</span><span class="p">,</span>
+        <span class="n">demo_suspected</span><span class="o">=</span><span class="n">demo_suspected</span><span class="p">,</span>
+        <span class="n">content_completeness</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+        <span class="n">sha256</span><span class="o">=</span><span class="n">digest</span><span class="p">,</span>
+        <span class="n">size_bytes</span><span class="o">=</span><span class="n">size</span><span class="p">,</span>
+        <span class="n">expected_size_bytes</span><span class="o">=</span><span class="n">expected_size</span><span class="p">,</span>
+        <span class="n">spine_text_chars_approx</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">stripped</span><span class="p">)</span> <span class="k">if</span> <span class="n">stripped</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">warnings</span><span class="o">=</span><span class="n">warnings</span><span class="p">,</span>
+        <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_looks_like_mp3</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;ID3&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">data</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span> <span class="ow">in</span> <span class="p">{</span><span class="sa">b</span><span class="s2">&quot;</span><span class="se">\xff\xfb</span><span class="s2">&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\xff\xf3</span><span class="s2">&quot;</span><span class="p">,</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\xff\xf2</span><span class="s2">&quot;</span><span class="p">}</span>
+
+
+<div class="viewcode-block" id="validate_audio">
+<a class="viewcode-back" href="../../api_reference.html#vnthuquan.validators.validate_audio">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_audio</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span> <span class="n">expected_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ValidationResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate a downloaded audio bundle ZIP or a single MP3 file.&quot;&quot;&quot;</span>
+
+    <span class="n">audio_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">errors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">warnings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">size</span> <span class="o">=</span> <span class="n">audio_path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="k">if</span> <span class="n">audio_path</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">digest</span> <span class="o">=</span> <span class="n">sha256_file</span><span class="p">(</span><span class="n">audio_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">audio_path</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">transfer_complete</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">expected_size</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">size</span> <span class="o">==</span> <span class="n">expected_size</span>
+    <span class="k">if</span> <span class="n">expected_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">size</span> <span class="o">!=</span> <span class="n">expected_size</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;byte count mismatch: expected </span><span class="si">{</span><span class="n">expected_size</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">suffix</span> <span class="o">=</span> <span class="n">audio_path</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">file_type_valid</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">container_valid</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">content_readable</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">manifest_items</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">if</span> <span class="n">suffix</span> <span class="ow">in</span> <span class="n">MP3_EXTENSIONS</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">audio_path</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;rb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">handle</span><span class="p">:</span>
+                <span class="n">head</span> <span class="o">=</span> <span class="n">handle</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">16</span><span class="p">)</span>
+            <span class="n">file_type_valid</span> <span class="o">=</span> <span class="n">_looks_like_mp3</span><span class="p">(</span><span class="n">head</span><span class="p">)</span>
+            <span class="n">content_readable</span> <span class="o">=</span> <span class="n">file_type_valid</span> <span class="ow">and</span> <span class="nb">bool</span><span class="p">(</span><span class="n">size</span> <span class="ow">and</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="mi">1024</span><span class="p">)</span>
+            <span class="n">container_valid</span> <span class="o">=</span> <span class="n">file_type_valid</span>
+            <span class="n">manifest_items</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">file_type_valid</span> <span class="k">else</span> <span class="mi">0</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">file_type_valid</span><span class="p">:</span>
+                <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;file does not look like an MP3&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;could not read file: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">audio_path</span><span class="p">)</span> <span class="k">as</span> <span class="n">zf</span><span class="p">:</span>
+                <span class="n">bad_member</span> <span class="o">=</span> <span class="n">zf</span><span class="o">.</span><span class="n">testzip</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">bad_member</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ZIP integrity failed at </span><span class="si">{</span><span class="n">bad_member</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">names</span> <span class="o">=</span> <span class="n">zf</span><span class="o">.</span><span class="n">namelist</span><span class="p">()</span>
+                <span class="n">mp3_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names</span> <span class="k">if</span> <span class="n">Path</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;.mp3&quot;</span><span class="p">]</span>
+                <span class="n">manifest_items</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mp3_names</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">mp3_names</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;audio ZIP contains no MP3 files&quot;</span><span class="p">)</span>
+                <span class="n">bad_mp3s</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">mp3_names</span><span class="p">:</span>
+                    <span class="k">with</span> <span class="n">zf</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="k">as</span> <span class="n">handle</span><span class="p">:</span>
+                        <span class="n">head</span> <span class="o">=</span> <span class="n">handle</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">16</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">_looks_like_mp3</span><span class="p">(</span><span class="n">head</span><span class="p">):</span>
+                        <span class="n">bad_mp3s</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">bad_mp3s</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;audio entries do not look like MP3 files: </span><span class="si">{</span><span class="n">bad_mp3s</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">strict</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="s2">&quot;manifest.json&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;audio ZIP strict validation requires manifest.json&quot;</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">manifest</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">zf</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">&quot;manifest.json&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">))</span>
+                        <span class="n">manifest_entries</span> <span class="o">=</span> <span class="p">{</span>
+                            <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entry&quot;</span><span class="p">)</span>
+                            <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">manifest</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;assets&quot;</span><span class="p">,</span> <span class="p">[])</span>
+                            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;entry&quot;</span><span class="p">)</span>
+                        <span class="p">}</span>
+                        <span class="n">missing_entries</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">mp3_names</span><span class="p">)</span> <span class="o">-</span> <span class="n">manifest_entries</span><span class="p">)</span>
+                        <span class="n">extra_entries</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">manifest_entries</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">mp3_names</span><span class="p">))</span>
+                        <span class="k">if</span> <span class="n">missing_entries</span><span class="p">:</span>
+                            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;audio manifest is missing entries: </span><span class="si">{</span><span class="n">missing_entries</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">extra_entries</span><span class="p">:</span>
+                            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                                <span class="sa">f</span><span class="s2">&quot;audio manifest references missing MP3 files: </span><span class="si">{</span><span class="n">extra_entries</span><span class="si">}</span><span class="s2">&quot;</span>
+                            <span class="p">)</span>
+                <span class="n">file_type_valid</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="n">container_valid</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">errors</span>
+                <span class="n">content_readable</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">mp3_names</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">bad_mp3s</span>
+        <span class="k">except</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">BadZipFile</span><span class="p">:</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;file is not a valid ZIP audio bundle&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">,</span> <span class="ne">UnicodeDecodeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;audio manifest is not valid JSON: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;could not read file: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;audio file is empty&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">suffix</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">MP3_EXTENSIONS</span> <span class="ow">and</span> <span class="n">suffix</span> <span class="o">!=</span> <span class="s2">&quot;.zip&quot;</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;audio validation expected a .zip bundle or .mp3 file&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">ValidationResult</span><span class="p">(</span>
+        <span class="n">path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">audio_path</span><span class="p">),</span>
+        <span class="n">ok</span><span class="o">=</span><span class="ow">not</span> <span class="n">errors</span> <span class="ow">and</span> <span class="p">(</span><span class="n">transfer_complete</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="n">file_type_valid</span> <span class="ow">and</span> <span class="n">content_readable</span><span class="p">,</span>
+        <span class="n">transfer_complete</span><span class="o">=</span><span class="n">transfer_complete</span><span class="p">,</span>
+        <span class="n">file_type_valid</span><span class="o">=</span><span class="n">file_type_valid</span><span class="p">,</span>
+        <span class="n">container_valid</span><span class="o">=</span><span class="n">container_valid</span><span class="p">,</span>
+        <span class="n">content_readable</span><span class="o">=</span><span class="n">content_readable</span><span class="p">,</span>
+        <span class="n">demo_suspected</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">content_completeness</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+        <span class="n">sha256</span><span class="o">=</span><span class="n">digest</span><span class="p">,</span>
+        <span class="n">size_bytes</span><span class="o">=</span><span class="n">size</span><span class="p">,</span>
+        <span class="n">expected_size_bytes</span><span class="o">=</span><span class="n">expected_size</span><span class="p">,</span>
+        <span class="n">manifest_items</span><span class="o">=</span><span class="n">manifest_items</span><span class="p">,</span>
+        <span class="n">warnings</span><span class="o">=</span><span class="n">warnings</span><span class="p">,</span>
+        <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="validate_file">
+<a class="viewcode-back" href="../../api_reference.html#vnthuquan.validators.validate_file">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_file</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+    <span class="n">expected_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">strict</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ValidationResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate a saved file.&quot;&quot;&quot;</span>
+
+    <span class="n">fmt</span> <span class="o">=</span> <span class="nb">format</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
+        <span class="n">suffix</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="n">fmt</span> <span class="o">=</span> <span class="s2">&quot;audio&quot;</span> <span class="k">if</span> <span class="n">suffix</span> <span class="o">==</span> <span class="s2">&quot;.zip&quot;</span> <span class="k">else</span> <span class="n">suffix</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s2">&quot;epub&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">validate_epub</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">expected_size</span><span class="o">=</span><span class="n">expected_size</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="n">strict</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s2">&quot;pdf&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">validate_pdf</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">expected_size</span><span class="o">=</span><span class="n">expected_size</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="n">strict</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s2">&quot;text&quot;</span> <span class="ow">or</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s2">&quot;txt&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">validate_text</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">expected_size</span><span class="o">=</span><span class="n">expected_size</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="n">strict</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s2">&quot;audio&quot;</span> <span class="ow">or</span> <span class="n">fmt</span> <span class="o">==</span> <span class="s2">&quot;mp3&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">validate_audio</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">expected_size</span><span class="o">=</span><span class="n">expected_size</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="n">strict</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ValidationResult</span><span class="p">(</span>
+        <span class="n">path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">),</span>
+        <span class="n">ok</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">transfer_complete</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">file_type_valid</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">container_valid</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">content_readable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">demo_suspected</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">content_completeness</span><span class="o">=</span><span class="s2">&quot;unknown&quot;</span><span class="p">,</span>
+        <span class="n">errors</span><span class="o">=</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;validation for format &#39;</span><span class="si">{</span><span class="n">fmt</span><span class="si">}</span><span class="s2">&#39; is not supported&quot;</span><span class="p">],</span>
+    <span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026-2026, Duc A. Hoang.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

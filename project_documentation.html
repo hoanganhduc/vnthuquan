@@ -1,0 +1,255 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Documentation &mdash; vnthuquan 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=9a2dae69"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="API Reference" href="api_reference.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            vnthuquan
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli_reference.html">CLI Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="validation.html">Validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mirrors.html">Mirrors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="categories.html">Categories And Formats</a></li>
+<li class="toctree-l1"><a class="reference internal" href="listing.html">Listing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_reference.html">API Reference</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Project Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#vnthuquan-project-documentation">vnthuquan Project Documentation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#architecture">Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#download-flow">Download Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#search-flow">Search Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#listing-flow">Listing Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#validation-flow">Validation Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#archive-and-cache">Archive And Cache</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mvp-boundaries">MVP Boundaries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#safety">Safety</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">vnthuquan</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Project Documentation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/project_documentation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="project-documentation">
+<h1>Project Documentation<a class="headerlink" href="#project-documentation" title="Link to this heading"></a></h1>
+</section>
+<section id="vnthuquan-project-documentation">
+<h1>vnthuquan Project Documentation<a class="headerlink" href="#vnthuquan-project-documentation" title="Link to this heading"></a></h1>
+<section id="architecture">
+<h2>Architecture<a class="headerlink" href="#architecture" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">vnthuquan</span></code> separates site-specific parsing from the public client. The
+<code class="docutils literal notranslate"><span class="pre">LegacySiteAdapter</span></code> owns ASP.NET route details, cookies, parser rules, and asset
+discovery. <code class="docutils literal notranslate"><span class="pre">VnThuQuanClient</span></code> exposes stable methods and handles download
+planning, output paths, and validation.</p>
+</section>
+<section id="download-flow">
+<h2>Download Flow<a class="headerlink" href="#download-flow" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p>Resolve one selector: title, URL, or tid.</p></li>
+<li><p>Fetch book metadata.</p></li>
+<li><p>Discover format-specific links through the site AJAX endpoint or reader page.</p></li>
+<li><p>Build a dry-run <code class="docutils literal notranslate"><span class="pre">DownloadPlan</span></code>.</p></li>
+<li><p>If <code class="docutils literal notranslate"><span class="pre">--execute</span></code> is supplied, stream or generate to <code class="docutils literal notranslate"><span class="pre">.partial</span></code>.</p></li>
+<li><p>Validate the saved format.</p></li>
+<li><p>Atomically rename the file after validation.</p></li>
+<li><p>Record a JSONL archive entry unless archive recording is disabled.</p></li>
+</ol>
+<p>Direct and audio asset downloads use the same adapter session as search and
+listing, so cookies, headers, retries, request pacing, and optional cache
+settings are consistent. Executed downloads retry other known mirrors after
+download or validation failures unless failover is disabled or the user pins a
+specific mirror.</p>
+<p>Supported executable formats:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">epub</span></code>: direct EPUB asset.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pdf</span></code>: PDF source exposed by the reader; the plan warns when the reader marks direct download disabled.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">text</span></code>: generated UTF-8 export assembled from text chapter AJAX responses.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">audio</span></code>: ZIP bundle of discovered MP3 files plus <code class="docutils literal notranslate"><span class="pre">manifest.json</span></code>.</p></li>
+</ul>
+<p>The CLI keeps downloads dry-run by default. Dry-run output is part of the
+normal workflow because it exposes the exact asset URL, planned output path,
+warnings, expected size when available, and validation checks before any file is
+written.</p>
+<p>Bulk downloads use a queue-first workflow. <code class="docutils literal notranslate"><span class="pre">download</span> <span class="pre">--all</span></code> resolves a bounded
+set of results and writes a queue manifest; <code class="docutils literal notranslate"><span class="pre">download</span> <span class="pre">--from-manifest</span></code> executes
+that reviewed queue. Parallel queue execution is explicit through <code class="docutils literal notranslate"><span class="pre">--jobs</span></code>.</p>
+</section>
+<section id="search-flow">
+<h2>Search Flow<a class="headerlink" href="#search-flow" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">search</span></code> supports one or more titles, authors, author IDs, categories, formats,
+and all-field lookup values. Title and author searches use the site’s AJAX
+endpoint. Category, author ID, and format searches use the site’s paginated
+listing pages and then apply optional client-side query and exact-match filters.
+Multiple values in the same dimension are ORed; different dimensions are
+combined when the site exposes enough metadata, such as author + format or
+category + format.</p>
+<p>Examples:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>search<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Mưa Đỏ&quot;</span><span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Thiên Long Bát Bộ&quot;</span><span class="w"> </span>--format<span class="w"> </span>epub
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--author<span class="w"> </span><span class="s2">&quot;Kim Dung&quot;</span><span class="w"> </span>--author<span class="w"> </span><span class="s2">&quot;Chu Lai&quot;</span><span class="w"> </span>--format<span class="w"> </span>epub,pdf<span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--category<span class="w"> </span><span class="m">23</span><span class="w"> </span>--category<span class="w"> </span><span class="m">26</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span>
+vnthuquan<span class="w"> </span>--json<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;Chu Lai&quot;</span><span class="w"> </span>--all<span class="w"> </span>--format<span class="w"> </span>epub
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--category<span class="w"> </span><span class="m">23</span><span class="w"> </span>--category<span class="w"> </span><span class="m">26</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--jobs<span class="w"> </span>auto
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--author<span class="w"> </span><span class="s2">&quot;Kim Dung&quot;</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--print<span class="w"> </span>title,url
+</pre></div>
+</div>
+<p>Python callers can pass either a scalar or list for multi-value selectors:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">vnthuquan</span><span class="w"> </span><span class="kn">import</span> <span class="n">VnThuQuanClient</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">VnThuQuanClient</span><span class="p">()</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">search</span><span class="p">(</span>
+    <span class="n">authors</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Kim Dung&quot;</span><span class="p">,</span> <span class="s2">&quot;Chu Lai&quot;</span><span class="p">],</span>
+    <span class="n">formats</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;epub&quot;</span><span class="p">,</span> <span class="s2">&quot;pdf&quot;</span><span class="p">],</span>
+    <span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="listing-flow">
+<h2>Listing Flow<a class="headerlink" href="#listing-flow" title="Link to this heading"></a></h2>
+<p>Native listing methods wrap the site’s paginated routes:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>list<span class="w"> </span>latest<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>authors<span class="w"> </span>--initial<span class="w"> </span>A<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>title-initial<span class="w"> </span>A<span class="w"> </span>--format<span class="w"> </span>epub
+vnthuquan<span class="w"> </span>list<span class="w"> </span>most-viewed<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>five-star<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>category<span class="w"> </span><span class="m">23</span><span class="w"> </span>--format<span class="w"> </span>epub
+vnthuquan<span class="w"> </span>list<span class="w"> </span>author<span class="w"> </span><span class="m">284</span><span class="w"> </span>--format<span class="w"> </span>epub
+vnthuquan<span class="w"> </span>list<span class="w"> </span>format<span class="w"> </span>epub
+</pre></div>
+</div>
+<p>Derived top lists use global ranked pages and then filter locally:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>list<span class="w"> </span>top<span class="w"> </span>--category<span class="w"> </span><span class="m">6</span><span class="w"> </span>--source<span class="w"> </span>most-viewed<span class="w"> </span>--scan-pages<span class="w"> </span><span class="m">20</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>top<span class="w"> </span>--author-id<span class="w"> </span><span class="m">284</span><span class="w"> </span>--source<span class="w"> </span>most-viewed<span class="w"> </span>--scan-pages<span class="w"> </span><span class="m">20</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+</pre></div>
+</div>
+<p>These derived lists are complete only for the ranked pages scanned.</p>
+</section>
+<section id="validation-flow">
+<h2>Validation Flow<a class="headerlink" href="#validation-flow" title="Link to this heading"></a></h2>
+<p>Validation checks transfer size when available, SHA256, and format-specific
+structure: EPUB package structure, PDF header/EOF markers, UTF-8 text
+readability, or audio ZIP/MP3 headers. Canonical completeness remains <code class="docutils literal notranslate"><span class="pre">unknown</span></code>
+unless independently verified.</p>
+<p>Strict validation is opt-in through <code class="docutils literal notranslate"><span class="pre">vnthuquan</span> <span class="pre">validate</span> <span class="pre">--strict</span></code> or
+<code class="docutils literal notranslate"><span class="pre">vnthuquan</span> <span class="pre">download</span> <span class="pre">--strict-verify</span></code>. It turns selected structural warnings into
+errors, including missing PDF EOF markers, HTML-looking text exports, missing
+EPUB TOC/nav entries, demo/sample markers, and audio manifests that do not match
+bundled MP3 files.</p>
+<p>External validators are opt-in through <code class="docutils literal notranslate"><span class="pre">--external</span></code>, <code class="docutils literal notranslate"><span class="pre">--epubcheck</span></code>, and <code class="docutils literal notranslate"><span class="pre">--ace</span></code>.
+Missing external executables are reported as validation failures when requested.</p>
+<p>Image-format entries are searchable and listable, but they do not yet have an
+executable download path because the live site does not expose one stable
+ebook-level image asset route.</p>
+</section>
+<section id="archive-and-cache">
+<h2>Archive And Cache<a class="headerlink" href="#archive-and-cache" title="Link to this heading"></a></h2>
+<p>Executed downloads are recorded in <code class="docutils literal notranslate"><span class="pre">~/.local/share/vnthuquan/downloads.jsonl</span></code>
+by default. The archive records TID, URL, title, author, format, output path,
+SHA256, size, validation status, mirror, timestamp, and skipped status.</p>
+<p>The HTTP cache is persistent when <code class="docutils literal notranslate"><span class="pre">cache_ttl_seconds</span></code> is greater than zero. By
+default it writes to <code class="docutils literal notranslate"><span class="pre">~/.cache/vnthuquan/http-cache.json</span></code>; parallel workers
+disable persistent cache writes to avoid cache-file races.</p>
+</section>
+<section id="mvp-boundaries">
+<h2>MVP Boundaries<a class="headerlink" href="#mvp-boundaries" title="Link to this heading"></a></h2>
+<p>Native per-category/per-author top routes and Calibre integration are deferred.
+Top-by-category and top-by-author remain derived scans over global ranked
+pages.</p>
+</section>
+<section id="safety">
+<h2>Safety<a class="headerlink" href="#safety" title="Link to this heading"></a></h2>
+<p>Downloads are dry-run by default. Users are responsible for rights and
+permissions for any material they download.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="api_reference.html" class="btn btn-neutral float-left" title="API Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026-2026, Duc A. Hoang.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

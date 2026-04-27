@@ -1,0 +1,348 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Usage Guide &mdash; vnthuquan 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=9a2dae69"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Configuration" href="configuration.html" />
+    <link rel="prev" title="vnthuquan Documentation" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            vnthuquan
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Usage Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#search">Search</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#show-metadata-and-links">Show metadata and links</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#dry-run-download">Dry-run download</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#execute-download">Execute download</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#filename-templates">Filename templates</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#queue-manifests">Queue manifests</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#other-formats">Other formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#validate">Validate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#archive">Archive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#categories-and-formats">Categories and formats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#site-lists">Site lists</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cli_reference.html">CLI Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="validation.html">Validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mirrors.html">Mirrors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="categories.html">Categories And Formats</a></li>
+<li class="toctree-l1"><a class="reference internal" href="listing.html">Listing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_reference.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="project_documentation.html">Project Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="project_documentation.html#vnthuquan-project-documentation">vnthuquan Project Documentation</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">vnthuquan</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Usage Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/usage.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="usage-guide">
+<h1>Usage Guide<a class="headerlink" href="#usage-guide" title="Link to this heading"></a></h1>
+<p>The first version supports search, metadata inspection, link discovery, EPUB,
+PDF, generated text, and audio downloads, mirror checks, and read-only
+category/format listing.
+Search can target one or more titles, authors, author IDs, categories, formats,
+or title and author together.</p>
+<section id="search">
+<h2>Search<a class="headerlink" href="#search" title="Link to this heading"></a></h2>
+<p>Basic searches:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;cthulhu&quot;</span>
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Mưa Đỏ&quot;</span><span class="w"> </span>--exact
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--author<span class="w"> </span><span class="s2">&quot;Kim Dung&quot;</span><span class="w"> </span>--format<span class="w"> </span>epub
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--category<span class="w"> </span><span class="m">23</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+</pre></div>
+</div>
+<p>Repeated flags search for any matching value in that selector family:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>search<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Mưa Đỏ&quot;</span><span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Ăn Mày Dĩ Vãng&quot;</span>
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--author<span class="w"> </span><span class="s2">&quot;Kim Dung&quot;</span><span class="w"> </span>--author<span class="w"> </span><span class="s2">&quot;Chu Lai&quot;</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--format<span class="w"> </span>pdf
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--author-id<span class="w"> </span><span class="m">42</span><span class="w"> </span>--author-id<span class="w"> </span><span class="m">1600</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--category<span class="w"> </span><span class="m">23</span><span class="w"> </span>--category<span class="w"> </span><span class="m">26</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+</pre></div>
+</div>
+<p>Formats can be repeated or comma-separated:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>search<span class="w"> </span>--author<span class="w"> </span><span class="s2">&quot;Kim Dung&quot;</span><span class="w"> </span>--format<span class="w"> </span>pdf,epub
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--author<span class="w"> </span><span class="s2">&quot;Kim Dung&quot;</span><span class="w"> </span>--format<span class="w"> </span>pdf<span class="w"> </span>--format<span class="w"> </span>epub
+</pre></div>
+</div>
+<p>Different selector families are combined where metadata is available:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>search<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--author<span class="w"> </span><span class="s2">&quot;Kim Dung&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--author<span class="w"> </span><span class="s2">&quot;Chu Lai&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--format<span class="w"> </span>epub,pdf<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--limit<span class="w"> </span><span class="m">10</span>
+</pre></div>
+</div>
+<p>Search both title and author fields:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;Chu Lai&quot;</span><span class="w"> </span>--all<span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+vnthuquan<span class="w"> </span>search<span class="w"> </span><span class="s2">&quot;Mưa Đỏ&quot;</span><span class="w"> </span><span class="s2">&quot;Thiên Long Bát Bộ&quot;</span><span class="w"> </span>--all<span class="w"> </span>--format<span class="w"> </span>epub
+</pre></div>
+</div>
+<p>JSON output:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>--json<span class="w"> </span>search<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Mưa Đỏ&quot;</span><span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Thiên Long Bát Bộ&quot;</span><span class="w"> </span>--format<span class="w"> </span>epub
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--author<span class="w"> </span><span class="s2">&quot;Kim Dung&quot;</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--print<span class="w"> </span>title,url
+</pre></div>
+</div>
+<p>Parallel search is explicit and should be used only for independent live-site
+requests:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>search<span class="w"> </span>--category<span class="w"> </span><span class="m">23</span><span class="w"> </span>--category<span class="w"> </span><span class="m">26</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--jobs<span class="w"> </span>auto<span class="w"> </span>--limit<span class="w"> </span><span class="m">20</span>
+</pre></div>
+</div>
+<p>Python wrapper examples:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">vnthuquan</span><span class="w"> </span><span class="kn">import</span> <span class="n">VnThuQuanClient</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">VnThuQuanClient</span><span class="p">()</span>
+
+<span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">search</span><span class="p">(</span>
+   <span class="n">titles</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Mưa Đỏ&quot;</span><span class="p">,</span> <span class="s2">&quot;Thiên Long Bát Bộ&quot;</span><span class="p">],</span>
+   <span class="n">formats</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;epub&quot;</span><span class="p">],</span>
+   <span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">author_results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">search_by_author</span><span class="p">(</span>
+   <span class="p">[</span><span class="s2">&quot;Kim Dung&quot;</span><span class="p">,</span> <span class="s2">&quot;Chu Lai&quot;</span><span class="p">],</span>
+   <span class="n">formats</span><span class="o">=</span><span class="s2">&quot;epub,pdf&quot;</span><span class="p">,</span>
+   <span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="show-metadata-and-links">
+<h2>Show metadata and links<a class="headerlink" href="#show-metadata-and-links" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>show<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Lời hiệu triệu của Cthulhu&quot;</span><span class="w"> </span>--links
+</pre></div>
+</div>
+</section>
+<section id="dry-run-download">
+<h2>Dry-run download<a class="headerlink" href="#dry-run-download" title="Link to this heading"></a></h2>
+<p>Downloads are dry-run by default. <code class="docutils literal notranslate"><span class="pre">--dry-run</span></code> is accepted when you want to
+make that behavior explicit.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>download<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--title<span class="w"> </span><span class="s2">&quot;Lời hiệu triệu của Cthulhu&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--format<span class="w"> </span>epub<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--out<span class="w"> </span>~/Downloads<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--dry-run
+</pre></div>
+</div>
+</section>
+<section id="execute-download">
+<h2>Execute download<a class="headerlink" href="#execute-download" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>download<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--title<span class="w"> </span><span class="s2">&quot;Lời hiệu triệu của Cthulhu&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--format<span class="w"> </span>epub<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--out<span class="w"> </span>~/Downloads<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--execute
+</pre></div>
+</div>
+</section>
+<section id="filename-templates">
+<h2>Filename templates<a class="headerlink" href="#filename-templates" title="Link to this heading"></a></h2>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--filename-template</span></code> to control output names. Supported fields are
+<code class="docutils literal notranslate"><span class="pre">{title}</span></code>, <code class="docutils literal notranslate"><span class="pre">{author}</span></code>, <code class="docutils literal notranslate"><span class="pre">{format}</span></code>, and <code class="docutils literal notranslate"><span class="pre">{tid}</span></code>.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>download<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--title<span class="w"> </span><span class="s2">&quot;Lời hiệu triệu của Cthulhu&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--format<span class="w"> </span>epub<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--out<span class="w"> </span>~/Downloads<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--filename-template<span class="w"> </span><span class="s2">&quot;{title} - {author} [{tid}]&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--dry-run
+</pre></div>
+</div>
+</section>
+<section id="queue-manifests">
+<h2>Queue manifests<a class="headerlink" href="#queue-manifests" title="Link to this heading"></a></h2>
+<p>Bulk downloads are intentionally split into a review step and an execute step.
+<code class="docutils literal notranslate"><span class="pre">download</span> <span class="pre">--all</span></code> writes a queue manifest only.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>download<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--all<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--category<span class="w"> </span><span class="m">23</span><span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--format<span class="w"> </span>epub<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--limit<span class="w"> </span><span class="m">20</span><span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--manifest<span class="w"> </span>queue.json<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--dry-run
+</pre></div>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>download<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--from-manifest<span class="w"> </span>queue.json<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--execute<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--jobs<span class="w"> </span>auto<span class="w"> </span><span class="se">\</span>
+<span class="w">   </span>--progress
+</pre></div>
+</div>
+<p>Downloads retry other known mirrors after download or validation failures. Use
+<code class="docutils literal notranslate"><span class="pre">--no-failover</span></code> to keep a failing download on the selected mirror. A
+user-provided <code class="docutils literal notranslate"><span class="pre">--mirror</span></code> is treated as pinned and is not silently changed.</p>
+</section>
+<section id="other-formats">
+<h2>Other formats<a class="headerlink" href="#other-formats" title="Link to this heading"></a></h2>
+<p>Search the format first, then pass either the title, URL, or TID to
+<code class="docutils literal notranslate"><span class="pre">download</span></code>. Dry-run first so the CLI can show the live asset URL, output path,
+expected size when available, and planned validation.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>search<span class="w"> </span>--format<span class="w"> </span>pdf<span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span>
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--format<span class="w"> </span>text<span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span>
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--format<span class="w"> </span>audio<span class="w"> </span>--limit<span class="w"> </span><span class="m">5</span>
+</pre></div>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>download<span class="w"> </span>--url<span class="w"> </span><span class="s2">&quot;http://vietnamthuquan.eu/truyen/truyen.aspx?tid=...&quot;</span><span class="w"> </span>--format<span class="w"> </span>pdf<span class="w"> </span>--out<span class="w"> </span>~/Downloads<span class="w"> </span>--dry-run
+vnthuquan<span class="w"> </span>download<span class="w"> </span>--url<span class="w"> </span><span class="s2">&quot;http://vietnamthuquan.eu/truyen/truyen.aspx?tid=...&quot;</span><span class="w"> </span>--format<span class="w"> </span>text<span class="w"> </span>--out<span class="w"> </span>~/Downloads<span class="w"> </span>--dry-run
+vnthuquan<span class="w"> </span>download<span class="w"> </span>--url<span class="w"> </span><span class="s2">&quot;http://vietnamthuquan.eu/truyen/truyen.aspx?tid=...&quot;</span><span class="w"> </span>--format<span class="w"> </span>audio<span class="w"> </span>--out<span class="w"> </span>~/Downloads<span class="w"> </span>--dry-run
+</pre></div>
+</div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">--execute</span></code> after reviewing the dry-run plan:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>download<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Some PDF Title&quot;</span><span class="w"> </span>--format<span class="w"> </span>pdf<span class="w"> </span>--out<span class="w"> </span>~/Downloads<span class="w"> </span>--execute
+vnthuquan<span class="w"> </span>download<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Some Text Title&quot;</span><span class="w"> </span>--format<span class="w"> </span>text<span class="w"> </span>--out<span class="w"> </span>~/Downloads<span class="w"> </span>--execute
+vnthuquan<span class="w"> </span>download<span class="w"> </span>--title<span class="w"> </span><span class="s2">&quot;Some Audio Title&quot;</span><span class="w"> </span>--format<span class="w"> </span>audio<span class="w"> </span>--out<span class="w"> </span>~/Downloads<span class="w"> </span>--execute
+</pre></div>
+</div>
+<p>Format behavior:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">epub</span></code> saves the direct EPUB asset.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">pdf</span></code> saves the PDF source exposed by the site reader and reports when the reader disables direct download.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">text</span></code> walks the site chapter list and writes one UTF-8 <code class="docutils literal notranslate"><span class="pre">.txt</span></code> export.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">audio</span></code> packages discovered MP3 files into one <code class="docutils literal notranslate"><span class="pre">.zip</span></code> with a <code class="docutils literal notranslate"><span class="pre">manifest.json</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">image</span></code> entries can be searched and listed, but executable image downloads are not implemented because the site does not expose one stable ebook-level image asset route.</p></li>
+</ul>
+<p>For audio, dry-run first and check <code class="docutils literal notranslate"><span class="pre">Expected</span> <span class="pre">size</span></code>; some bundles are hundreds
+of MB. For text, validation proves the generated file is readable UTF-8, not
+that the source site contains every canonical chapter.</p>
+</section>
+<section id="validate">
+<h2>Validate<a class="headerlink" href="#validate" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>validate<span class="w"> </span>~/Downloads/book.epub
+vnthuquan<span class="w"> </span>validate<span class="w"> </span>~/Downloads/book.pdf<span class="w"> </span>--format<span class="w"> </span>pdf
+vnthuquan<span class="w"> </span>validate<span class="w"> </span>~/Downloads/book.txt<span class="w"> </span>--format<span class="w"> </span>text
+vnthuquan<span class="w"> </span>validate<span class="w"> </span>~/Downloads/book.zip<span class="w"> </span>--format<span class="w"> </span>audio
+vnthuquan<span class="w"> </span>validate<span class="w"> </span>~/Downloads/book.zip<span class="w"> </span>--format<span class="w"> </span>audio<span class="w"> </span>--strict
+vnthuquan<span class="w"> </span>validate<span class="w"> </span>~/Downloads/book.epub<span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--external
+</pre></div>
+</div>
+</section>
+<section id="archive">
+<h2>Archive<a class="headerlink" href="#archive" title="Link to this heading"></a></h2>
+<p>Executed downloads are recorded in a JSONL archive unless <code class="docutils literal notranslate"><span class="pre">--no-archive</span></code> is
+used.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>archive<span class="w"> </span>path
+vnthuquan<span class="w"> </span>archive<span class="w"> </span>list<span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+vnthuquan<span class="w"> </span>archive<span class="w"> </span>list<span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span><span class="w"> </span>--print<span class="w"> </span>title,format,output_path,sha256
+</pre></div>
+</div>
+</section>
+<section id="categories-and-formats">
+<h2>Categories and formats<a class="headerlink" href="#categories-and-formats" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>categories<span class="w"> </span>list
+vnthuquan<span class="w"> </span>categories<span class="w"> </span>show<span class="w"> </span><span class="m">23</span>
+vnthuquan<span class="w"> </span>formats<span class="w"> </span>list
+vnthuquan<span class="w"> </span>list<span class="w"> </span>category<span class="w"> </span><span class="m">23</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>author<span class="w"> </span><span class="m">284</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>format<span class="w"> </span>epub<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--category<span class="w"> </span><span class="m">23</span><span class="w"> </span>--format<span class="w"> </span>epub
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--category<span class="w"> </span><span class="m">23</span><span class="w"> </span>--category<span class="w"> </span><span class="m">26</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span>
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--author-id<span class="w"> </span><span class="m">42</span><span class="w"> </span>--author-id<span class="w"> </span><span class="m">1600</span><span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span>
+vnthuquan<span class="w"> </span>search<span class="w"> </span>--format<span class="w"> </span>pdf,epub<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+</pre></div>
+</div>
+</section>
+<section id="site-lists">
+<h2>Site lists<a class="headerlink" href="#site-lists" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>list<span class="w"> </span>latest<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>authors<span class="w"> </span>--initial<span class="w"> </span>A<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>title-initial<span class="w"> </span>A<span class="w"> </span>--format<span class="w"> </span>epub<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>most-viewed<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>five-star<span class="w"> </span>--page<span class="w"> </span><span class="m">1</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+</pre></div>
+</div>
+<p>Derived top lists scan global ranked pages and filter locally:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>vnthuquan<span class="w"> </span>list<span class="w"> </span>top<span class="w"> </span>--category<span class="w"> </span><span class="m">6</span><span class="w"> </span>--source<span class="w"> </span>most-viewed<span class="w"> </span>--scan-pages<span class="w"> </span><span class="m">20</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+vnthuquan<span class="w"> </span>list<span class="w"> </span>top<span class="w"> </span>--author-id<span class="w"> </span><span class="m">284</span><span class="w"> </span>--source<span class="w"> </span>most-viewed<span class="w"> </span>--scan-pages<span class="w"> </span><span class="m">20</span><span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="vnthuquan Documentation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="configuration.html" class="btn btn-neutral float-right" title="Configuration" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026-2026, Duc A. Hoang.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -20,6 +20,8 @@ class Config:
     download_dir: str | None = None
     timeout: float = 30.0
     retries: int = 2
+    cache_ttl_seconds: float = 0.0
+    request_interval_seconds: float = 0.2
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -48,6 +50,8 @@ def load_config(path: str | Path | None = None) -> Config:
         download_dir=raw.get("download_dir"),
         timeout=float(raw.get("timeout", 30.0)),
         retries=int(raw.get("retries", 2)),
+        cache_ttl_seconds=float(raw.get("cache_ttl_seconds", 0.0)),
+        request_interval_seconds=float(raw.get("request_interval_seconds", 0.2)),
     )
     return config
 
@@ -56,7 +60,9 @@ def save_config(config: Config, path: str | Path | None = None) -> Path:
     config_path = Path(path).expanduser() if path else default_config_path()
     try:
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(json.dumps(config.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        config_path.write_text(
+            json.dumps(config.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
     except OSError as exc:
         raise ConfigError(f"Could not write config file {config_path}: {exc}") from exc
     return config_path
@@ -84,6 +90,10 @@ def set_config_value(key: str, value: str, path: str | Path | None = None) -> Co
         config.timeout = float(value)
     elif key == "retries":
         config.retries = int(value)
+    elif key == "cache_ttl_seconds":
+        config.cache_ttl_seconds = float(value)
+    elif key == "request_interval_seconds":
+        config.request_interval_seconds = float(value)
     else:
         raise ConfigError(f"Unsupported config key: {key}")
     save_config(config, path)
@@ -100,6 +110,10 @@ def unset_config_value(key: str, path: str | Path | None = None) -> Config:
         config.timeout = 30.0
     elif key == "retries":
         config.retries = 2
+    elif key == "cache_ttl_seconds":
+        config.cache_ttl_seconds = 0.0
+    elif key == "request_interval_seconds":
+        config.request_interval_seconds = 0.2
     else:
         raise ConfigError(f"Unsupported config key: {key}")
     save_config(config, path)

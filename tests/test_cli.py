@@ -129,3 +129,31 @@ def test_list_parser_accepts_derived_top_target() -> None:
     assert args.category == "6"
     assert args.scan_pages == 20
     assert args.format == ["epub,pdf"]
+
+
+def test_download_parser_accepts_failover_and_strict_verify_flags() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "download",
+            "--title",
+            "Mưa Đỏ",
+            "--execute",
+            "--strict-verify",
+            "--no-failover",
+        ]
+    )
+
+    assert args.command == "download"
+    assert args.strict_verify
+    assert args.no_failover
+
+
+def test_validate_parser_accepts_strict_flag() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["validate", "book.epub", "--strict"])
+
+    assert args.command == "validate"
+    assert args.strict

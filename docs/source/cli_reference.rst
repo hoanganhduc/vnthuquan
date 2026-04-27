@@ -70,8 +70,20 @@ Search option summary:
 
    vnthuquan download --title "..." --format epub --out ~/Downloads --dry-run
    vnthuquan download --title "..." --format epub --out ~/Downloads --execute
+   vnthuquan download --title "..." --format pdf --out ~/Downloads --dry-run
+   vnthuquan download --title "..." --format text --out ~/Downloads --execute
+   vnthuquan download --title "..." --format audio --out ~/Downloads --dry-run
    vnthuquan download --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --out ~/Downloads --execute
    vnthuquan download --id "2qtqv3m3237n..." --out ~/Downloads --manifest plan.json
+
+Recommended format-specific workflow:
+
+.. code-block:: bash
+
+   vnthuquan search --format pdf --limit 5
+   vnthuquan show --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --links
+   vnthuquan download --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --format pdf --out ~/Downloads --dry-run
+   vnthuquan download --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --format pdf --out ~/Downloads --execute
 
 Download option summary:
 
@@ -80,13 +92,24 @@ Download option summary:
    --title TEXT       Resolve by title
    --url URL          Resolve by book URL
    --id TID           Resolve by site TID
-   --format epub      EPUB is the only executable download format in 0.1.x
+   --format FORMAT    epub, pdf, text, or audio
    --out DIR          Output directory
    --index N          Select a title-search result when the title is ambiguous
    --exact            Require exact title match
    --dry-run          Show the plan without downloading
    --execute          Download and write files
+   --strict-verify    Use stricter post-download validation
+   --no-failover      Do not retry known mirrors after download failure
    --manifest PATH    Write a download manifest JSON file
+
+Download output by format:
+
+.. code-block:: text
+
+   epub     direct .epub asset
+   pdf      direct .pdf source exposed by the site reader
+   text     generated UTF-8 .txt file from text chapters
+   audio    .zip bundle containing MP3 files and manifest.json
 
 ``validate``
 ~~~~~~~~~~~~
@@ -94,6 +117,10 @@ Download option summary:
 .. code-block:: bash
 
    vnthuquan validate ~/Downloads/book.epub
+   vnthuquan validate ~/Downloads/book.pdf --format pdf
+   vnthuquan validate ~/Downloads/book.txt --format text
+   vnthuquan validate ~/Downloads/book.zip --format audio
+   vnthuquan validate ~/Downloads/book.zip --format audio --strict
 
 ``list``
 ~~~~~~~~

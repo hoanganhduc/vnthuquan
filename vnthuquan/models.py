@@ -156,6 +156,7 @@ class DownloadPlan:
     partial_path: str
     dry_run: bool
     validation_checks: list[str]
+    assets: list[LinkInfo] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:

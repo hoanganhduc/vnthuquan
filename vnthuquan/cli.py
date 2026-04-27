@@ -44,7 +44,9 @@ def _selector_from_args(args: argparse.Namespace) -> dict[str, str]:
     }
     active = [key for key, value in selector.items() if value]
     if len(active) != 1:
-        raise argparse.ArgumentTypeError("Exactly one selector is required: --title, --url, or --id")
+        raise argparse.ArgumentTypeError(
+            "Exactly one selector is required: --title, --url, or --id"
+        )
     return {key: value for key, value in selector.items() if value}
 
 
@@ -75,11 +77,25 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     search = subparsers.add_parser("search", help="Search or list books")
-    search.add_argument("query", nargs="*", help="Search query; repeat for multiple title/all-field queries")
-    search.add_argument("--title", action="append", help="Search by title; repeat for multiple titles")
-    search.add_argument("--author", action="append", help="Search by author; repeat for multiple authors")
-    search.add_argument("--author-id", action="append", help="List or search books by author ID; repeat for multiple IDs")
-    search.add_argument("--category", action="append", help="List or search within a category; repeat for multiple categories")
+    search.add_argument(
+        "query", nargs="*", help="Search query; repeat for multiple title/all-field queries"
+    )
+    search.add_argument(
+        "--title", action="append", help="Search by title; repeat for multiple titles"
+    )
+    search.add_argument(
+        "--author", action="append", help="Search by author; repeat for multiple authors"
+    )
+    search.add_argument(
+        "--author-id",
+        action="append",
+        help="List or search books by author ID; repeat for multiple IDs",
+    )
+    search.add_argument(
+        "--category",
+        action="append",
+        help="List or search within a category; repeat for multiple categories",
+    )
     search.add_argument(
         "--field",
         choices=["title", "author", "category", "author-id", "author_id", "all"],
@@ -87,7 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search.add_argument("--all", action="store_true", help="Search title and author fields")
     search.add_argument("--exact", action="store_true", help="Require exact title/author matches")
-    search.add_argument("--format", action="append", help="Filter by format; repeat or use comma-separated values")
+    search.add_argument(
+        "--format", action="append", help="Filter by format; repeat or use comma-separated values"
+    )
     search.add_argument("--limit", type=int)
     search.add_argument("--page", type=int, default=1)
     search.set_defaults(func=cmd_search)
@@ -100,9 +118,9 @@ def build_parser() -> argparse.ArgumentParser:
     show.add_argument("--exact", action="store_true", help="Require exact title match")
     show.set_defaults(func=cmd_show)
 
-    download = subparsers.add_parser("download", help="Plan or execute an EPUB download")
+    download = subparsers.add_parser("download", help="Plan or execute an ebook download")
     _add_selector_args(download)
-    download.add_argument("--format", default="epub", choices=["epub"])
+    download.add_argument("--format", default="epub", choices=["epub", "pdf", "text", "audio"])
     download.add_argument("--out", help="Output directory")
     download.add_argument("--index", type=int, help="Resolve title search result by index")
     download.add_argument("--exact", action="store_true", help="Require exact title match")
@@ -110,16 +128,29 @@ def build_parser() -> argparse.ArgumentParser:
     download.add_argument("--dry-run", action="store_true", help="Show plan without downloading")
     download.add_argument("--execute", action="store_true", help="Download and write files")
     download.add_argument("--overwrite", action="store_true", help="Replace existing output")
-    download.add_argument("--resume", action="store_true", help="Reserved for future resumable downloads")
-    download.add_argument("--keep-invalid", action="store_true", help="Keep partial file if validation fails")
+    download.add_argument(
+        "--keep-invalid", action="store_true", help="Keep partial file if validation fails"
+    )
     download.add_argument("--no-verify", action="store_true", help="Skip post-download validation")
-    download.add_argument("--no-failover", action="store_true", help="Reserved for future failover control")
+    download.add_argument(
+        "--strict-verify", action="store_true", help="Use stricter post-download validation"
+    )
+    download.add_argument(
+        "--no-failover",
+        action="store_true",
+        help="Do not retry known mirrors after download failure",
+    )
     download.add_argument("--manifest", help="Write download manifest JSON")
     download.set_defaults(func=cmd_download)
 
-    validate = subparsers.add_parser("validate", help="Validate a saved EPUB")
+    validate = subparsers.add_parser("validate", help="Validate a saved ebook file")
     validate.add_argument("path")
-    validate.add_argument("--format", default="auto", choices=["auto", "epub"])
+    validate.add_argument(
+        "--format", default="auto", choices=["auto", "epub", "pdf", "text", "audio"]
+    )
+    validate.add_argument(
+        "--strict", action="store_true", help="Treat structural warnings as validation errors"
+    )
     validate.set_defaults(func=cmd_validate)
 
     list_cmd = subparsers.add_parser("list", help="List site indexes and ranked book lists")
@@ -128,7 +159,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_listing_args(list_latest, include_format=True)
     list_latest.set_defaults(func=cmd_list_latest)
     list_authors = list_sub.add_parser("authors", help="List authors by initial")
-    list_authors.add_argument("--initial", required=True, help="Initial letter; use # for numeric authors")
+    list_authors.add_argument(
+        "--initial", required=True, help="Initial letter; use # for numeric authors"
+    )
     _add_listing_args(list_authors)
     list_authors.set_defaults(func=cmd_list_authors)
     list_title_initial = list_sub.add_parser("title-initial", help="List books by title initial")
@@ -159,8 +192,12 @@ def build_parser() -> argparse.ArgumentParser:
     target.add_argument("--author-id", help="Author ID")
     target.add_argument("--author", help="Exact author name")
     list_top.add_argument("--source", default="most-viewed", choices=["most-viewed", "five-star"])
-    list_top.add_argument("--scan-pages", type=int, default=10, help="Number of ranked pages to scan before filtering")
-    list_top.add_argument("--format", action="append", help="Filter by format; repeat or use comma-separated values")
+    list_top.add_argument(
+        "--scan-pages", type=int, default=10, help="Number of ranked pages to scan before filtering"
+    )
+    list_top.add_argument(
+        "--format", action="append", help="Filter by format; repeat or use comma-separated values"
+    )
     list_top.add_argument("--limit", type=int, default=20)
     list_top.set_defaults(func=cmd_list_top)
 
@@ -220,7 +257,11 @@ def _add_listing_args(parser: argparse.ArgumentParser, include_format: bool = Fa
     parser.add_argument("--page", type=int, default=1)
     parser.add_argument("--limit", type=int)
     if include_format:
-        parser.add_argument("--format", action="append", help="Filter by format; repeat or use comma-separated values")
+        parser.add_argument(
+            "--format",
+            action="append",
+            help="Filter by format; repeat or use comma-separated values",
+        )
 
 
 def _print_results(results: list[Any]) -> None:
@@ -286,7 +327,9 @@ def cmd_search(args: argparse.Namespace) -> int:
 def cmd_show(args: argparse.Namespace) -> int:
     client = _client(args)
     selector = _selector_from_args(args)
-    payload = client.show(selector, assets=args.assets, links=args.links, index=args.index, exact=args.exact)
+    payload = client.show(
+        selector, assets=args.assets, links=args.links, index=args.index, exact=args.exact
+    )
     if args.json:
         _emit({"ok": True, **payload}, True)
     else:
@@ -326,6 +369,8 @@ def cmd_download(args: argparse.Namespace) -> int:
         overwrite=args.overwrite,
         keep_invalid=args.keep_invalid,
         no_verify=args.no_verify,
+        strict_verify=args.strict_verify,
+        failover=not args.no_failover and not args.mirror,
         manifest=args.manifest,
     )
     if args.json:
@@ -339,10 +384,19 @@ def cmd_download(args: argparse.Namespace) -> int:
         print(f"Format: {plan.format}")
         print(f"Mirror: {plan.mirror}")
         print(f"Asset URL: {plan.asset.url}")
+        if plan.assets:
+            print(f"Asset count: {len(plan.assets)}")
+            if plan.format == "audio":
+                for asset in plan.assets:
+                    print(f"- {asset.url}")
         if plan.asset.content_type:
             print(f"Content-Type: {plan.asset.content_type}")
         if plan.asset.content_length is not None:
             print(f"Expected size: {plan.asset.content_length} bytes")
+        if plan.warnings:
+            print("Warnings:")
+            for warning in plan.warnings:
+                print(f"- {warning}")
         print(f"Output: {plan.output_path}")
         print(f"Temp file: {plan.partial_path}")
         print("Planned validation:")
@@ -361,7 +415,7 @@ def cmd_download(args: argparse.Namespace) -> int:
 
 def cmd_validate(args: argparse.Namespace) -> int:
     client = _client(args)
-    result = client.validate(args.path, format=args.format)
+    result = client.validate(args.path, format=args.format, strict=args.strict)
     if args.json:
         _emit({"ok": result.ok, "validation": result}, True)
     else:
@@ -401,7 +455,9 @@ def cmd_list_authors(args: argparse.Namespace) -> int:
 
 
 def cmd_list_title_initial(args: argparse.Namespace) -> int:
-    results = _client(args).list_by_title_initial(args.initial, formats=args.format, limit=args.limit, page=args.page)
+    results = _client(args).list_by_title_initial(
+        args.initial, formats=args.format, limit=args.limit, page=args.page
+    )
     if args.json:
         _emit({"ok": True, "results": results}, True)
     else:
@@ -428,7 +484,9 @@ def cmd_list_five_star(args: argparse.Namespace) -> int:
 
 
 def cmd_list_category(args: argparse.Namespace) -> int:
-    results = _client(args).list_by_category(args.category, formats=args.format, limit=args.limit, page=args.page)
+    results = _client(args).list_by_category(
+        args.category, formats=args.format, limit=args.limit, page=args.page
+    )
     if args.json:
         _emit({"ok": True, "results": results}, True)
     else:
@@ -437,7 +495,9 @@ def cmd_list_category(args: argparse.Namespace) -> int:
 
 
 def cmd_list_author(args: argparse.Namespace) -> int:
-    results = _client(args).list_by_author(args.author_id, formats=args.format, limit=args.limit, page=args.page)
+    results = _client(args).list_by_author(
+        args.author_id, formats=args.format, limit=args.limit, page=args.page
+    )
     if args.json:
         _emit({"ok": True, "results": results}, True)
     else:
@@ -551,13 +611,23 @@ def cmd_mirrors_check(args: argparse.Namespace) -> int:
 
 def cmd_mirrors_use(args: argparse.Namespace) -> int:
     config = set_config_value("default_mirror", args.url, args.config)
-    _emit({"ok": True, "config": config.to_dict()} if args.json else f"Default mirror: {config.default_mirror}", args.json)
+    _emit(
+        {"ok": True, "config": config.to_dict()}
+        if args.json
+        else f"Default mirror: {config.default_mirror}",
+        args.json,
+    )
     return 0
 
 
 def cmd_mirrors_reset(args: argparse.Namespace) -> int:
     config = set_config_value("default_mirror", DEFAULT_MIRROR, args.config)
-    _emit({"ok": True, "config": config.to_dict()} if args.json else f"Default mirror: {config.default_mirror}", args.json)
+    _emit(
+        {"ok": True, "config": config.to_dict()}
+        if args.json
+        else f"Default mirror: {config.default_mirror}",
+        args.json,
+    )
     return 0
 
 
@@ -569,7 +639,12 @@ def cmd_config_path(args: argparse.Namespace) -> int:
 
 def cmd_config_show(args: argparse.Namespace) -> int:
     config = load_config(args.config)
-    _emit({"ok": True, "config": config.to_dict()} if args.json else json.dumps(config.to_dict(), indent=2), args.json)
+    _emit(
+        {"ok": True, "config": config.to_dict()}
+        if args.json
+        else json.dumps(config.to_dict(), indent=2),
+        args.json,
+    )
     return 0
 
 
@@ -593,7 +668,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     payload = {
         "ok": live.ok,
         "version": __version__,
-        "config_path": str(Path(args.config).expanduser() if args.config else default_config_path()),
+        "config_path": str(
+            Path(args.config).expanduser() if args.config else default_config_path()
+        ),
         "download_dir": str(download_dir),
         "download_dir_exists": download_dir.exists(),
         "mirror": live,

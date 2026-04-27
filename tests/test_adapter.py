@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+import requests
+
 from vnthuquan.adapter import LegacySiteAdapter
-from vnthuquan.models import Category
+from vnthuquan.errors import AssetDiscoveryError
+from vnthuquan.models import BookMetadata, Category
 
 
 class Response:
@@ -25,6 +29,53 @@ class CategoryAdapter(LegacySiteAdapter):
     def _request(self, method: str, url: str, **kwargs) -> Response:
         self.requested_url = url
         return Response(self.html)
+
+
+class PdfAdapter(LegacySiteAdapter):
+    def __init__(self) -> None:
+        super().__init__(mirror="http://example.test")
+
+    def _post_chapter_endpoint(self, endpoint, book):
+        return '<iframe src="noidung_pdf.aspx?tid=abc123"></iframe>'
+
+    def _request(self, method: str, url: str, **kwargs) -> Response:
+        if method == "GET":
+            return Response(
+                """
+                <script>
+                var option_df_111 = {
+                  "enableDownload":"false",
+                  "source":"../userfiles/files/pdf/book.pdf"
+                };
+                </script>
+                """
+            )
+        return Response("")
+
+
+class PartialTextAdapter(LegacySiteAdapter):
+    def __init__(self) -> None:
+        super().__init__(mirror="http://example.test")
+
+    def _request(self, method: str, url: str, **kwargs) -> Response:
+        return Response(
+            """
+            <acronym title="First Chapter">
+              <li onClick="noidung1('tuaid=99&chuongid=1')"><a href="#phandau">Chương 1</a></li>
+            </acronym>
+            <acronym title="Second Chapter">
+              <li onClick="noidung1('tuaid=99&chuongid=2')"><a href="#phandau">Chương 2</a></li>
+            </acronym>
+            """
+        )
+
+    def _post_text_chapter(self, book: BookMetadata, chapter_id: str) -> str:
+        if chapter_id == "1":
+            return """
+            <span class="tuahoi1">First Chapter</span>
+            <div class="chuhoavn"><p>Readable chapter.</p></div>
+            """
+        return '<span class="tuahoi1">Second Chapter</span><div class="chuhoavn"></div>'
 
 
 def test_parse_listing_extracts_search_result() -> None:
@@ -205,3 +256,96 @@ def test_list_author_books_fills_missing_author_metadata() -> None:
     assert len(results) == 1
     assert results[0].author == "Example Author"
     assert results[0].author_id == 1
+
+
+def test_parse_text_chapters_extracts_chapter_ids_and_titles() -> None:
+    html = """
+    <acronym title="First Chapter">
+      <li onClick="noidung1('tuaid=99&chuongid=1')"><a href="#phandau">Chương 1</a></li>
+    </acronym>
+    <acronym title="Second Chapter">
+      <li onClick="noidung1('tuaid=99&chuongid=2')"><a href="#phandau">Chương 2</a></li>
+    </acronym>
+    """
+    adapter = LegacySiteAdapter()
+
+    chapters = adapter._parse_text_chapters(html, "99")
+
+    assert chapters == [("1", "Chương 1", "First Chapter"), ("2", "Chương 2", "Second Chapter")]
+
+
+def test_parse_text_chapter_extracts_heading_and_body() -> None:
+    html = """
+    <span class="tuahoi1">First Chapter</span>
+    <div class="chuhoavn">
+      <p>First paragraph.</p>
+      <p>Second paragraph.</p>
+    </div>
+    """
+    adapter = LegacySiteAdapter()
+
+    heading, body = adapter._parse_text_chapter(html)
+
+    assert heading == "First Chapter"
+    assert body == "First paragraph.\n\nSecond paragraph."
+
+
+def test_discover_pdf_links_parses_quoted_source_and_restriction() -> None:
+    adapter = PdfAdapter()
+    book = adapter.get_book("abc123")
+    book.format = "pdf"
+    book.tuaid = "1"
+
+    links = adapter._discover_pdf_links(book)
+
+    assert links[0].restricted_by_site_ui is True
+    assert links[1].url == "http://example.test/userfiles/files/pdf/book.pdf"
+    assert links[1].restricted_by_site_ui is True
+
+
+def test_export_text_fails_when_any_discovered_chapter_is_unreadable() -> None:
+    adapter = PartialTextAdapter()
+    book = BookMetadata(
+        tid="abc123",
+        title="Text Book",
+        author=None,
+        format="text",
+        url="http://example.test/truyen/truyen.aspx?tid=abc123",
+        mirror="http://example.test",
+        tuaid="99",
+    )
+
+    with pytest.raises(AssetDiscoveryError, match="Missing readable text"):
+        adapter.export_text(book)
+
+
+def test_request_cache_reuses_non_streaming_response() -> None:
+    session = requests.Session()
+    calls = 0
+
+    def request(method, url, timeout, **kwargs):
+        nonlocal calls
+        calls += 1
+        response = requests.Response()
+        response.status_code = 200
+        response.reason = "OK"
+        response.url = url
+        response.headers["Content-Type"] = "text/plain; charset=utf-8"
+        response.encoding = "utf-8"
+        response._content = b"cached response"
+        return response
+
+    session.request = request  # type: ignore[method-assign]
+    adapter = LegacySiteAdapter(
+        mirror="http://example.test",
+        cache_ttl=30,
+        request_interval=0,
+        session=session,
+    )
+
+    first = adapter._request("GET", "http://example.test/one")
+    second = adapter._request("GET", "http://example.test/one")
+
+    assert first.text == "cached response"
+    assert second.text == "cached response"
+    assert calls == 1

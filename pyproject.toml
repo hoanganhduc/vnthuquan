@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vnthuquan-hoanganhduc"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
   { name = "Duc A. Hoang (hoanganhduc)", email = "anhduc.hoang1990@gmail.com" },
 ]
-description = "Python wrapper and CLI for Vietnam Thu Quan ebook discovery and EPUB downloads"
+description = "Python wrapper and CLI for Vietnam Thu Quan ebook discovery and downloads"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "GPL-3.0-or-later"

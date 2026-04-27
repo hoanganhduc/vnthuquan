@@ -17,5 +17,8 @@ Commands:
    vnthuquan mirrors use http://vnthuquan.net
    vnthuquan mirrors reset
 
-If failover is added later, assets must be re-discovered on the new mirror
-before any host substitution is attempted.
+Downloads automatically retry other known mirrors after download or validation
+failures. The client re-discovers metadata and assets on the new mirror instead
+of guessing a replacement host. Use ``vnthuquan download --no-failover`` to
+disable this behavior. A command-level ``--mirror`` is treated as pinned and is
+not silently changed.

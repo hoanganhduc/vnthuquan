@@ -15,42 +15,43 @@
 ![Release](https://img.shields.io/github/v/release/hoanganhduc/vnthuquan?include_prereleases&label=release)
 ![Tag](https://img.shields.io/github/v/tag/hoanganhduc/vnthuquan?label=tag&sort=semver)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)
+[![CI](https://github.com/hoanganhduc/vnthuquan/actions/workflows/ci.yml/badge.svg)](https://github.com/hoanganhduc/vnthuquan/actions/workflows/ci.yml)
 [![Docs](https://github.com/hoanganhduc/vnthuquan/actions/workflows/docs.yml/badge.svg)](https://github.com/hoanganhduc/vnthuquan/actions/workflows/docs.yml)
 ![GitHub](https://img.shields.io/badge/GitHub-Repo-black?logo=github)
 ![Status](https://img.shields.io/badge/status-pre--release-yellow)
 ![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
-![EPUB](https://img.shields.io/badge/EPUB-downloads-orange?logo=bookstack)
+![Formats](https://img.shields.io/badge/formats-epub%20%7C%20pdf%20%7C%20text%20%7C%20audio-orange?logo=bookstack)
 
 `vnthuquan` is a Python package and CLI for discovering books on Vietnam Thu
-Quan legacy mirrors and downloading EPUB assets exposed by the site.
+Quan legacy mirrors and downloading ebook assets exposed by the site.
 
 The first version is intentionally conservative: downloads are dry-run by
-default, EPUB is the only supported download format, and validation reports what
-can be proven structurally without claiming canonical completeness.
+default, validation reports what can be proven structurally without claiming
+canonical completeness, and links are discovered live instead of guessed.
 
 ## Current Scope
 
-Supported in `0.1.0`:
+Supported in `0.1.1`:
 
 - search books
 - search by one or more titles, authors, author IDs, categories, formats, or all fields
 - show metadata
 - show reader/direct links
-- dry-run EPUB downloads
-- execute EPUB downloads with validation
-- validate saved EPUB files
+- dry-run downloads for EPUB, PDF, generated text, and audio ZIP bundles
+- execute EPUB, PDF, generated text, and audio downloads with validation
+- validate saved EPUB, PDF, text, and audio files
 - list categories and formats
 - list latest books, authors, title initials, most-viewed books, five-star books, category books, author books, and format books
 - derive top books by category or author from bounded scans of global ranked lists
 - check mirrors and basic environment health
+- automatic download failover across known mirrors unless a mirror is pinned
+- opt-in strict validation with `--strict` and `--strict-verify`
+- polite request pacing and optional request caching foundations
 
 Deferred:
 
-- PDF/audio/text downloads
-- text export
 - bulk category downloads
 - native per-category/per-author top routes if the site adds them later
-- persistent cache
 - parallel downloads
 
 ## Installation
@@ -207,15 +208,67 @@ vnthuquan download \
   --execute
 ```
 
-Validate an EPUB:
+Download by format
+------------------
+
+Search the format first, then pass either the title, URL, or TID to
+`download`. A dry run is the recommended first step because it shows the exact
+asset URL, output path, expected size when available, and validation checks.
+
+```bash
+vnthuquan search --format pdf --limit 5
+vnthuquan search --format text --limit 5
+vnthuquan search --format audio --limit 5
+```
+
+```bash
+vnthuquan download --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --format pdf --out ~/Downloads --dry-run
+vnthuquan download --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --format text --out ~/Downloads --dry-run
+vnthuquan download --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --format audio --out ~/Downloads --dry-run
+```
+
+Use `--execute` after reviewing the dry-run plan:
+
+```bash
+vnthuquan download --title "Some PDF Title" --format pdf --out ~/Downloads --execute
+vnthuquan download --title "Some Text Title" --format text --out ~/Downloads --execute
+vnthuquan download --title "Some Audio Title" --format audio --out ~/Downloads --execute
+```
+
+Downloads retry other known mirrors after download or validation failures. Use
+`--no-failover` to keep a failing download on the selected mirror. When
+`--mirror` is provided, the CLI treats it as pinned and does not silently switch
+mirrors.
+
+Format behavior:
+
+- `epub` saves the direct EPUB asset.
+- `pdf` saves the PDF source exposed by the site reader and warns when the reader marks direct download as disabled.
+- `text` walks the site text chapter list and writes one UTF-8 `.txt` export.
+- `audio` packages all discovered MP3 files into one `.zip` with a `manifest.json`.
+- `image` entries can be searched and listed, but executable image downloads are not implemented because the site does not expose one stable ebook-level image asset route.
+
+For audio, dry-run first and check `Expected size`; some bundles are hundreds
+of MB. For text, validation proves the generated file is readable UTF-8, not
+that the source site contains every canonical chapter.
+
+Validate a downloaded file:
 
 ```bash
 vnthuquan validate ~/Downloads/book.epub
+vnthuquan validate ~/Downloads/book.pdf --format pdf
+vnthuquan validate ~/Downloads/book.txt --format text
+vnthuquan validate ~/Downloads/book.zip --format audio
+vnthuquan validate ~/Downloads/book.zip --format audio --strict
 ```
 
 ## Safety
 
 This tool discovers links exposed by the site. Users are responsible for making
 sure they have the right to download or use any material. Validation confirms
-transfer and EPUB structure; it does not prove that an ebook matches a canonical
+transfer and file structure; it does not prove that an ebook matches a canonical
 edition unless an external source is checked separately.
+
+## Acknowledgements
+
+This package was implemented with help from ChatGPT Codex.

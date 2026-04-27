@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from vnthuquan.client import VnThuQuanClient
 from vnthuquan.config import Config
+from vnthuquan.errors import DownloadError, UnsupportedFormatError
 from vnthuquan.models import Author, Category, DownloadPlan, DownloadResult, LinkInfo
 from vnthuquan.models import BookMetadata, SearchResult
 
@@ -14,13 +19,17 @@ def format_values(format) -> list[str]:
 
 
 class FakeAdapter:
-    mirror = "http://example.test"
-
-    def __init__(self) -> None:
+    def __init__(
+        self, mirror: str = "http://example.test", stream_bytes: bytes | None = None
+    ) -> None:
+        self.mirror = mirror
         self.searched_format: str | None = None
         self.fetched_url: str | None = None
+        self.stream_bytes = stream_bytes if stream_bytes is not None else b"ID3" + b"\0" * 2048
 
-    def search(self, query: str, field: str = "title", format: str | None = None, limit: int | None = None):
+    def search(
+        self, query: str, field: str = "title", format: str | None = None, limit: int | None = None
+    ):
         self.searched_format = format
         results = [
             SearchResult(
@@ -39,6 +48,30 @@ class FakeAdapter:
                 url="http://example.test/truyen/truyen.aspx?tid=mua-do",
                 mirror=self.mirror,
             ),
+            SearchResult(
+                tid="pdf-book",
+                title="pdf book (pdf)",
+                author="pdf author",
+                format="pdf",
+                url="http://example.test/truyen/truyen.aspx?tid=pdf-book",
+                mirror=self.mirror,
+            ),
+            SearchResult(
+                tid="audio-book",
+                title="audio book (audio)",
+                author="audio author",
+                format="audio",
+                url="http://example.test/truyen/truyen.aspx?tid=audio-book",
+                mirror=self.mirror,
+            ),
+            SearchResult(
+                tid="text-book",
+                title="text book",
+                author="text author",
+                format="text",
+                url="http://example.test/truyen/truyen.aspx?tid=text-book",
+                mirror=self.mirror,
+            ),
         ]
         formats = format_values(format)
         if formats:
@@ -49,13 +82,130 @@ class FakeAdapter:
         self.fetched_url = url_or_tid
         return BookMetadata(
             tid=url_or_tid.rsplit("=", 1)[-1],
-            title="mưa đỏ" if "mua-do" in url_or_tid else "cuộc thanh trừng mùa đông",
-            author="chu lai" if "mua-do" in url_or_tid else "john sandford",
-            format="epub",
+            title=self._book_title(url_or_tid),
+            author=self._book_author(url_or_tid),
+            format=self._book_format(url_or_tid),
             url=url_or_tid,
             mirror=self.mirror,
             tuaid="1",
         )
+
+    def _book_title(self, value: str) -> str:
+        if "mua-do" in value:
+            return "mưa đỏ"
+        if "pdf-book" in value:
+            return "pdf book"
+        if "audio-book" in value:
+            return "audio book"
+        if "text-book" in value:
+            return "text book"
+        return "cuộc thanh trừng mùa đông"
+
+    def _book_author(self, value: str) -> str:
+        if "mua-do" in value:
+            return "chu lai"
+        if "pdf-book" in value:
+            return "pdf author"
+        if "audio-book" in value:
+            return "audio author"
+        if "text-book" in value:
+            return "text author"
+        return "john sandford"
+
+    def _book_format(self, value: str) -> str:
+        if "pdf-book" in value:
+            return "pdf"
+        if "audio-book" in value:
+            return "audio"
+        if "text-book" in value:
+            return "text"
+        return "epub"
+
+    def discover_links(self, book: BookMetadata, formats=None):
+        if book.format == "epub":
+            return [
+                LinkInfo(
+                    kind="reader", format="epub", url=f"{book.url}#reader", mirror=self.mirror
+                ),
+                LinkInfo(
+                    kind="asset",
+                    format="epub",
+                    url="http://example.test/book.epub",
+                    mirror=self.mirror,
+                    content_type="application/epub+zip",
+                    content_length=1024,
+                    is_direct_asset=True,
+                ),
+            ]
+        if book.format == "pdf":
+            return [
+                LinkInfo(kind="reader", format="pdf", url=f"{book.url}#reader", mirror=self.mirror),
+                LinkInfo(
+                    kind="asset",
+                    format="pdf",
+                    url="http://example.test/book.pdf",
+                    mirror=self.mirror,
+                    content_type="application/pdf",
+                    content_length=2048,
+                    is_direct_asset=True,
+                    restricted_by_site_ui=True,
+                ),
+            ]
+        if book.format == "audio":
+            return [
+                LinkInfo(
+                    kind="reader", format="audio", url=f"{book.url}#reader", mirror=self.mirror
+                ),
+                LinkInfo(
+                    kind="asset",
+                    format="audio",
+                    url="http://example.test/audio/track-001.mp3",
+                    mirror=self.mirror,
+                    content_type="audio/mpeg",
+                    content_length=4096,
+                    is_direct_asset=True,
+                ),
+                LinkInfo(
+                    kind="asset",
+                    format="audio",
+                    url="http://example.test/audio/track-002.mp3",
+                    mirror=self.mirror,
+                    content_type="audio/mpeg",
+                    content_length=4096,
+                    is_direct_asset=True,
+                ),
+            ]
+        if book.format == "text":
+            return [
+                LinkInfo(
+                    kind="reader",
+                    format="text",
+                    url=book.url,
+                    mirror=self.mirror,
+                    is_direct_asset=False,
+                )
+            ]
+        return []
+
+    def _request(self, method: str, url: str, **kwargs):
+        class Response:
+            ok = True
+            status_code = 200
+
+            def __init__(self, content: bytes) -> None:
+                self.headers = {"Content-Length": str(len(content))}
+                self._content = content
+
+            def iter_content(self, chunk_size):
+                yield self._content
+
+            def close(self):
+                return None
+
+        return Response(self.stream_bytes)
+
+    def export_text(self, book: BookMetadata) -> str:
+        return f"{book.title}\nSource: {book.url}\n\n" + ("Readable text. " * 40)
 
     def list_category_books(
         self,
@@ -163,7 +313,9 @@ class FakeAdapter:
         ]
         return authors[:limit] if limit else authors
 
-    def list_title_initial_books(self, initial: str, format=None, page: int = 1, limit: int | None = None):
+    def list_title_initial_books(
+        self, initial: str, format=None, page: int = 1, limit: int | None = None
+    ):
         results = [
             SearchResult(
                 tid="a-book",
@@ -293,6 +445,119 @@ def test_client_derives_top_by_category_and_author() -> None:
 
     assert [result.tid for result in category_results] == ["top-kim"]
     assert [result.tid for result in author_results] == ["top-kim"]
+
+
+def test_plan_download_supports_pdf_with_restriction_warning(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter()  # type: ignore[assignment]
+
+    plan = client.plan_download({"title": "pdf book"}, format="pdf", out_dir=str(tmp_path))
+
+    assert plan.format == "pdf"
+    assert plan.output_path.endswith(".pdf")
+    assert plan.asset.url == "http://example.test/book.pdf"
+    assert plan.asset.restricted_by_site_ui is True
+    assert plan.warnings
+
+
+def test_plan_download_supports_audio_bundle(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter()  # type: ignore[assignment]
+
+    plan = client.plan_download({"title": "audio book"}, format="audio", out_dir=str(tmp_path))
+
+    assert plan.format == "audio"
+    assert plan.output_path.endswith(".zip")
+    assert plan.asset.kind == "asset_bundle"
+    assert len(plan.assets) == 2
+
+
+def test_plan_download_supports_generated_text(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter()  # type: ignore[assignment]
+
+    plan = client.plan_download({"title": "text book"}, format="text", out_dir=str(tmp_path))
+
+    assert plan.format == "text"
+    assert plan.output_path.endswith(".txt")
+    assert plan.asset.kind == "generated_text"
+
+
+def test_plan_download_rejects_format_mismatch(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter()  # type: ignore[assignment]
+
+    with pytest.raises(UnsupportedFormatError, match="not requested format"):
+        client.plan_download(
+            {"url": "http://example.test/truyen/truyen.aspx?tid=pdf-book"},
+            format="text",
+            out_dir=str(tmp_path),
+        )
+
+
+def test_download_without_execute_stays_dry_run(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter()  # type: ignore[assignment]
+
+    result = client.download(
+        {"title": "Mưa Đỏ"},
+        format="epub",
+        out_dir=str(tmp_path),
+        dry_run=False,
+        execute=False,
+    )
+
+    assert result.ok
+    assert result.plan.dry_run
+    assert result.path is None
+    assert not list(tmp_path.iterdir())
+
+
+def test_audio_download_fails_on_track_byte_mismatch(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter()  # type: ignore[assignment]
+
+    with pytest.raises(DownloadError, match="Audio byte count mismatch"):
+        client.download(
+            {"title": "audio book"},
+            format="audio",
+            out_dir=str(tmp_path),
+            execute=True,
+            no_verify=True,
+        )
+
+    assert not list(tmp_path.glob("*.partial"))
+
+
+def test_download_fails_over_to_second_mirror(tmp_path, monkeypatch) -> None:
+    class FailingAdapter(FakeAdapter):
+        def _request(self, method: str, url: str, **kwargs):
+            raise DownloadError("primary mirror failed")
+
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FailingAdapter("http://vietnamthuquan.eu")  # type: ignore[assignment]
+
+    def make_adapter(mirror: str):
+        return FakeAdapter(mirror=mirror, stream_bytes=b"downloaded bytes")
+
+    monkeypatch.setattr(
+        "vnthuquan.client.list_mirrors",
+        lambda: ["http://vietnamthuquan.eu", "http://vnthuquan.net"],
+    )
+    monkeypatch.setattr(client, "_make_adapter", make_adapter)
+
+    result = client.download(
+        {"title": "Mưa Đỏ"},
+        format="epub",
+        out_dir=str(tmp_path),
+        execute=True,
+        no_verify=True,
+    )
+
+    assert result.path is not None
+    assert Path(result.path).read_bytes() == b"downloaded bytes"
+    assert result.plan.mirror == "http://vnthuquan.net"
+    assert result.warnings
 
 
 def test_write_manifest_preserves_manifest_path(tmp_path) -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import zipfile
 from pathlib import Path
 
-from vnthuquan.validators import validate_epub
+from vnthuquan.validators import validate_audio, validate_epub, validate_pdf, validate_text
 
 
 def make_epub(path: Path, broken_spine: bool = False) -> None:
@@ -75,3 +75,62 @@ def test_validate_epub_rejects_html_renamed_epub(tmp_path: Path) -> None:
 
     assert not result.ok
     assert any("valid ZIP" in error for error in result.errors)
+
+
+def test_validate_pdf_accepts_basic_pdf(tmp_path: Path) -> None:
+    pdf = tmp_path / "book.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n1 0 obj\n<<>>\nendobj\n" + b"0" * 2048 + b"\n%%EOF\n")
+
+    result = validate_pdf(pdf, expected_size=pdf.stat().st_size)
+
+    assert result.ok
+    assert result.transfer_complete is True
+    assert result.file_type_valid
+    assert result.content_readable
+
+
+def test_validate_pdf_strict_rejects_missing_eof_marker(tmp_path: Path) -> None:
+    pdf = tmp_path / "book.pdf"
+    pdf.write_bytes(b"%PDF-1.7\n1 0 obj\n<<>>\nendobj\n" + b"0" * 2048)
+
+    relaxed = validate_pdf(pdf)
+    strict = validate_pdf(pdf, strict=True)
+
+    assert relaxed.ok
+    assert not strict.ok
+    assert any("EOF marker" in error for error in strict.errors)
+
+
+def test_validate_text_accepts_generated_export(tmp_path: Path) -> None:
+    text_file = tmp_path / "book.txt"
+    text_file.write_text("Title\nSource: example\n\n" + ("Readable text. " * 40), encoding="utf-8")
+
+    result = validate_text(text_file)
+
+    assert result.ok
+    assert result.file_type_valid
+    assert result.content_readable
+
+
+def test_validate_audio_accepts_mp3_bundle(tmp_path: Path) -> None:
+    bundle = tmp_path / "book.zip"
+    with zipfile.ZipFile(bundle, "w") as zf:
+        zf.writestr("track-001.mp3", b"ID3" + b"\0" * 2048)
+        zf.writestr("manifest.json", "{}")
+
+    result = validate_audio(bundle)
+
+    assert result.ok
+    assert result.manifest_items == 1
+
+
+def test_validate_audio_strict_requires_matching_manifest(tmp_path: Path) -> None:
+    bundle = tmp_path / "book.zip"
+    with zipfile.ZipFile(bundle, "w") as zf:
+        zf.writestr("track-001.mp3", b"ID3" + b"\0" * 2048)
+        zf.writestr("manifest.json", '{"assets": [{"entry": "missing.mp3"}]}')
+
+    result = validate_audio(bundle, strict=True)
+
+    assert not result.ok
+    assert any("manifest" in error for error in result.errors)

@@ -1,8 +1,9 @@
 Usage Guide
 ===========
 
-The first version supports search, metadata inspection, link discovery, EPUB
-download, EPUB validation, mirror checks, and read-only category/format listing.
+The first version supports search, metadata inspection, link discovery, EPUB,
+PDF, generated text, and audio downloads, mirror checks, and read-only
+category/format listing.
 Search can target one or more titles, authors, author IDs, categories, formats,
 or title and author together.
 
@@ -109,12 +110,59 @@ Execute download
       --out ~/Downloads \
       --execute
 
+Downloads retry other known mirrors after download or validation failures. Use
+``--no-failover`` to keep a failing download on the selected mirror. A
+user-provided ``--mirror`` is treated as pinned and is not silently changed.
+
+Other formats
+-------------
+
+Search the format first, then pass either the title, URL, or TID to
+``download``. Dry-run first so the CLI can show the live asset URL, output path,
+expected size when available, and planned validation.
+
+.. code-block:: bash
+
+   vnthuquan search --format pdf --limit 5
+   vnthuquan search --format text --limit 5
+   vnthuquan search --format audio --limit 5
+
+.. code-block:: bash
+
+   vnthuquan download --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --format pdf --out ~/Downloads --dry-run
+   vnthuquan download --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --format text --out ~/Downloads --dry-run
+   vnthuquan download --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --format audio --out ~/Downloads --dry-run
+
+Use ``--execute`` after reviewing the dry-run plan:
+
+.. code-block:: bash
+
+   vnthuquan download --title "Some PDF Title" --format pdf --out ~/Downloads --execute
+   vnthuquan download --title "Some Text Title" --format text --out ~/Downloads --execute
+   vnthuquan download --title "Some Audio Title" --format audio --out ~/Downloads --execute
+
+Format behavior:
+
+* ``epub`` saves the direct EPUB asset.
+* ``pdf`` saves the PDF source exposed by the site reader and reports when the reader disables direct download.
+* ``text`` walks the site chapter list and writes one UTF-8 ``.txt`` export.
+* ``audio`` packages discovered MP3 files into one ``.zip`` with a ``manifest.json``.
+* ``image`` entries can be searched and listed, but executable image downloads are not implemented because the site does not expose one stable ebook-level image asset route.
+
+For audio, dry-run first and check ``Expected size``; some bundles are hundreds
+of MB. For text, validation proves the generated file is readable UTF-8, not
+that the source site contains every canonical chapter.
+
 Validate
 --------
 
 .. code-block:: bash
 
    vnthuquan validate ~/Downloads/book.epub
+   vnthuquan validate ~/Downloads/book.pdf --format pdf
+   vnthuquan validate ~/Downloads/book.txt --format text
+   vnthuquan validate ~/Downloads/book.zip --format audio
+   vnthuquan validate ~/Downloads/book.zip --format audio --strict
 
 Categories and formats
 ----------------------

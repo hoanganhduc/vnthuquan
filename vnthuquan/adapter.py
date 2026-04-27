@@ -5,14 +5,24 @@ from __future__ import annotations
 import re
 import time
 from html import unescape
+from dataclasses import dataclass
 from urllib.parse import parse_qs, quote, urljoin, urlparse, urlsplit, urlunsplit
 
 import requests
 from bs4 import BeautifulSoup
+from requests.structures import CaseInsensitiveDict
 
 from .errors import AssetDiscoveryError, LiveCheckError, NotFoundError, ParseError, SearchError
 from .mirrors import DEFAULT_MIRROR, normalize_mirror
-from .models import Author, BookMetadata, Category, FormatCategory, LinkInfo, MirrorStatus, SearchResult
+from .models import (
+    Author,
+    BookMetadata,
+    Category,
+    FormatCategory,
+    LinkInfo,
+    MirrorStatus,
+    SearchResult,
+)
 
 FORMAT_IDS = {
     "text": 0,
@@ -60,6 +70,17 @@ CATEGORY_FALLBACK = [
     (35, "Tho, Truong Ca"),
     (36, "Van Hoc Mien Nam Truoc 75"),
 ]
+
+
+@dataclass(slots=True)
+class _CachedResponse:
+    status_code: int
+    reason: str
+    url: str
+    headers: dict[str, str]
+    content: bytes
+    encoding: str | None
+    stored_at: float
 
 
 def _quote_url(url: str) -> str:
@@ -110,6 +131,25 @@ def _date_from_text(value: str | None) -> str | None:
     return match.group(0) if match else None
 
 
+def _cache_payload_key(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        return repr(sorted((str(key), str(item)) for key, item in value.items()))
+    return repr(value)
+
+
+def _clone_cached_response(cached: _CachedResponse) -> requests.Response:
+    response = requests.Response()
+    response.status_code = cached.status_code
+    response.reason = cached.reason
+    response.url = cached.url
+    response.headers = CaseInsensitiveDict(cached.headers)
+    response._content = cached.content
+    response.encoding = cached.encoding
+    return response
+
+
 def _clean_title(title: str, fmt: str | None = None) -> str:
     cleaned = re.sub(r"\s+", " ", title).strip(" ,-")
     if fmt:
@@ -126,11 +166,17 @@ class LegacySiteAdapter:
         mirror: str = DEFAULT_MIRROR,
         timeout: float = 30.0,
         retries: int = 2,
+        cache_ttl: float = 0.0,
+        request_interval: float = 0.0,
         session: requests.Session | None = None,
     ) -> None:
         self.mirror = normalize_mirror(mirror)
         self.timeout = timeout
         self.retries = retries
+        self.cache_ttl = max(cache_ttl, 0.0)
+        self.request_interval = max(request_interval, 0.0)
+        self._cache: dict[tuple[str, str, str], _CachedResponse] = {}
+        self._last_request_at: float | None = None
         self.session = session or requests.Session()
         self.session.headers.update(
             {
@@ -143,14 +189,45 @@ class LegacySiteAdapter:
     def _url(self, path: str) -> str:
         return urljoin(f"{self.mirror}/", path.lstrip("/"))
 
+    def _wait_for_rate_limit(self) -> None:
+        if self.request_interval <= 0:
+            return
+        now = time.monotonic()
+        if self._last_request_at is not None:
+            remaining = self.request_interval - (now - self._last_request_at)
+            if remaining > 0:
+                time.sleep(remaining)
+        self._last_request_at = time.monotonic()
+
     def _request(self, method: str, url: str, **kwargs) -> requests.Response:
+        method = method.upper()
+        quoted_url = _quote_url(url)
+        stream = bool(kwargs.get("stream"))
+        data_key = _cache_payload_key(kwargs.get("data"))
+        cache_key = (method, quoted_url, data_key)
+        if self.cache_ttl > 0 and not stream:
+            cached = self._cache.get(cache_key)
+            if cached and time.monotonic() - cached.stored_at <= self.cache_ttl:
+                return _clone_cached_response(cached)
+
         last_error: Exception | None = None
         for attempt in range(self.retries + 1):
             try:
-                response = self.session.request(method, _quote_url(url), timeout=self.timeout, **kwargs)
+                self._wait_for_rate_limit()
+                response = self.session.request(method, quoted_url, timeout=self.timeout, **kwargs)
                 if response.status_code in {429, 500, 502, 503, 504} and attempt < self.retries:
                     time.sleep(0.5 * (attempt + 1))
                     continue
+                if self.cache_ttl > 0 and not stream and response.ok:
+                    self._cache[cache_key] = _CachedResponse(
+                        status_code=response.status_code,
+                        reason=response.reason,
+                        url=response.url,
+                        headers=dict(response.headers),
+                        content=response.content,
+                        encoding=response.encoding,
+                        stored_at=time.monotonic(),
+                    )
                 return response
             except requests.RequestException as exc:
                 last_error = exc
@@ -382,7 +459,9 @@ class LegacySiteAdapter:
             return url_or_tid
         return self._url(f"/truyen/truyen.aspx?tid={url_or_tid}")
 
-    def discover_links(self, book: BookMetadata, formats: list[str] | None = None) -> list[LinkInfo]:
+    def discover_links(
+        self, book: BookMetadata, formats: list[str] | None = None
+    ) -> list[LinkInfo]:
         requested = {fmt.lower() for fmt in formats} if formats else None
         links = [
             LinkInfo(
@@ -415,6 +494,50 @@ class LegacySiteAdapter:
             )
         return links
 
+    def export_text(self, book: BookMetadata) -> str:
+        """Export all discoverable text chapters as a single UTF-8 string."""
+
+        if not book.tuaid:
+            raise AssetDiscoveryError(f"Book has no tuaid: {book.url}")
+        response = self._request("GET", book.url)
+        if not response.ok:
+            raise AssetDiscoveryError(f"Text book page failed with HTTP {response.status_code}")
+
+        chapters = self._parse_text_chapters(response.text, book.tuaid)
+        if not chapters:
+            raise AssetDiscoveryError("Could not find text chapters")
+
+        lines = [
+            book.title,
+            f"Author: {book.author}" if book.author else None,
+            f"Source: {book.url}",
+            f"Mirror: {self.mirror}",
+            f"Chapters: {len(chapters)}",
+            "",
+        ]
+        text_parts = [line for line in lines if line is not None]
+        exported = 0
+        missing_chapters: list[str] = []
+        for chapter_id, label, chapter_title in chapters:
+            chapter_html = self._post_text_chapter(book, chapter_id)
+            heading, body_text = self._parse_text_chapter(chapter_html)
+            heading = heading or chapter_title or label
+            if not body_text:
+                missing_chapters.append(f"{label} ({chapter_id})")
+                continue
+            text_parts.extend([heading, "", body_text, ""])
+            exported += 1
+        if not exported:
+            raise AssetDiscoveryError("No readable text chapter content found")
+        if missing_chapters:
+            preview = ", ".join(missing_chapters[:5])
+            if len(missing_chapters) > 5:
+                preview += ", ..."
+            raise AssetDiscoveryError(
+                f"Missing readable text for {len(missing_chapters)} chapter(s): {preview}"
+            )
+        return "\n".join(text_parts).strip() + "\n"
+
     def list_categories(self) -> list[Category]:
         response = self._request("GET", self._url("/truyen/"))
         if not response.ok:
@@ -435,7 +558,9 @@ class LegacySiteAdapter:
     def list_formats(self) -> list[FormatCategory]:
         formats: list[FormatCategory] = []
         for slug, fmt_id in FORMAT_IDS.items():
-            formats.append(self._format_with_counts(FormatCategory(id=fmt_id, name=slug.title(), slug=slug)))
+            formats.append(
+                self._format_with_counts(FormatCategory(id=fmt_id, name=slug.title(), slug=slug))
+            )
         return formats
 
     def _parse_listing(self, html: str) -> list[SearchResult]:
@@ -484,7 +609,9 @@ class LegacySiteAdapter:
                     category_name=category_name,
                     date_or_views=date_or_views,
                     added_date=_date_from_text(date_or_views),
-                    views=_int_from_text(date_or_views) if date_or_views and "xem" in date_or_views.casefold() else None,
+                    views=_int_from_text(date_or_views)
+                    if date_or_views and "xem" in date_or_views.casefold()
+                    else None,
                 )
             )
         return results
@@ -626,6 +753,64 @@ class LegacySiteAdapter:
             raise AssetDiscoveryError(f"Asset AJAX failed with HTTP {response.status_code}")
         return response.text
 
+    def _post_text_chapter(self, book: BookMetadata, chapter_id: str) -> str:
+        if not book.tuaid:
+            raise AssetDiscoveryError(f"Book has no tuaid: {book.url}")
+        response = self._request(
+            "POST",
+            self._url("/truyen/chuonghoi_moi.aspx?"),
+            data={"tuaid": book.tuaid, "chuongid": chapter_id},
+            headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+        )
+        if not response.ok:
+            raise AssetDiscoveryError(f"Text chapter failed with HTTP {response.status_code}")
+        return response.text
+
+    def _parse_text_chapters(self, html: str, tuaid: str) -> list[tuple[str, str, str | None]]:
+        soup = BeautifulSoup(html, "html.parser")
+        chapters: list[tuple[str, str, str | None]] = []
+        seen: set[str] = set()
+        for item in soup.find_all("li"):
+            onclick = item.get("onclick") or item.get("onClick") or ""
+            match = re.search(
+                rf"tuaid={re.escape(str(tuaid))}&chuongid=(\d+)",
+                onclick,
+                flags=re.I,
+            )
+            if not match:
+                continue
+            chapter_id = match.group(1)
+            if chapter_id in seen:
+                continue
+            seen.add(chapter_id)
+            label = _text(item.find("a")) or f"Chapter {chapter_id}"
+            parent = item.find_parent("acronym")
+            chapter_title = unescape(parent.get("title", "")).strip() if parent else None
+            chapters.append((chapter_id, label, chapter_title or None))
+        return chapters
+
+    def _parse_text_chapter(self, html: str) -> tuple[str | None, str | None]:
+        soup = BeautifulSoup(html, "html.parser")
+        heading = _text(soup.select_one(".tuahoi1")) or _text(soup.select_one(".tuahoi"))
+        if not heading:
+            heading = _text(soup.find(["h1", "h2", "h3"]))
+        body = soup.select_one(".chuhoavn")
+        if body is None:
+            return heading, None
+        for br in body.find_all("br"):
+            br.replace_with("\n")
+        paragraphs = []
+        for paragraph in body.find_all("p"):
+            text = unescape(paragraph.get_text(" ", strip=True))
+            text = re.sub(r"[ \t]+", " ", text).strip()
+            if text:
+                paragraphs.append(text)
+        if paragraphs:
+            return heading, "\n\n".join(paragraphs)
+        text = unescape(body.get_text("\n", strip=True))
+        text = re.sub(r"\n{3,}", "\n\n", text).strip()
+        return heading, text or None
+
     def _discover_epub_links(self, book: BookMetadata) -> list[LinkInfo]:
         html = self._post_chapter_endpoint("chuonghoi_epub2.aspx?", book)
         soup = BeautifulSoup(html, "html.parser")
@@ -657,8 +842,18 @@ class LegacySiteAdapter:
         reader_response = self._request("GET", reader_url)
         if not reader_response.ok:
             raise AssetDiscoveryError(f"PDF reader failed with HTTP {reader_response.status_code}")
-        restricted = "enableDownload:false" in reader_response.text.replace(" ", "")
-        match = re.search(r'source\s*:\s*"([^"]+\.pdf)"', reader_response.text)
+        compact_reader = reader_response.text.replace(" ", "")
+        restricted = bool(
+            re.search(
+                r'["\']?enableDownload["\']?\s*:\s*["\']?false["\']?',
+                compact_reader,
+                flags=re.I,
+            )
+        )
+        match = re.search(
+            r'["\']?source["\']?\s*:\s*["\']([^"\']+\.pdf)["\']',
+            reader_response.text,
+        )
         links = [
             LinkInfo(
                 kind="reader",
@@ -688,7 +883,9 @@ class LegacySiteAdapter:
         reader_url = urljoin(self._url("/truyen/"), iframe["src"])
         reader_response = self._request("GET", reader_url)
         if not reader_response.ok:
-            raise AssetDiscoveryError(f"Audio reader failed with HTTP {reader_response.status_code}")
+            raise AssetDiscoveryError(
+                f"Audio reader failed with HTTP {reader_response.status_code}"
+            )
         reader = LinkInfo(
             kind="reader",
             format="audio",

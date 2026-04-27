@@ -11,11 +11,29 @@ planning, output paths, and validation.
 
 1. Resolve one selector: title, URL, or tid.
 2. Fetch book metadata.
-3. Discover EPUB asset links through the site AJAX endpoint.
+3. Discover format-specific links through the site AJAX endpoint or reader page.
 4. Build a dry-run `DownloadPlan`.
-5. If `--execute` is supplied, stream to `.partial`.
-6. Validate the EPUB.
+5. If `--execute` is supplied, stream or generate to `.partial`.
+6. Validate the saved format.
 7. Atomically rename the file after validation.
+
+Direct and audio asset downloads use the same adapter session as search and
+listing, so cookies, headers, retries, request pacing, and optional cache
+settings are consistent. Executed downloads retry other known mirrors after
+download or validation failures unless failover is disabled or the user pins a
+specific mirror.
+
+Supported executable formats:
+
+- `epub`: direct EPUB asset.
+- `pdf`: PDF source exposed by the reader; the plan warns when the reader marks direct download disabled.
+- `text`: generated UTF-8 export assembled from text chapter AJAX responses.
+- `audio`: ZIP bundle of discovered MP3 files plus `manifest.json`.
+
+The CLI keeps downloads dry-run by default. Dry-run output is part of the
+normal workflow because it exposes the exact asset URL, planned output path,
+warnings, expected size when available, and validation checks before any file is
+written.
 
 ## Search Flow
 
@@ -75,14 +93,26 @@ These derived lists are complete only for the ranked pages scanned.
 
 ## Validation Flow
 
-Validation checks transfer size, SHA256, ZIP integrity, EPUB package structure,
-manifest/spine readability, TOC/nav presence, and demo-marker heuristics.
-Canonical completeness remains `unknown` unless independently verified.
+Validation checks transfer size when available, SHA256, and format-specific
+structure: EPUB package structure, PDF header/EOF markers, UTF-8 text
+readability, or audio ZIP/MP3 headers. Canonical completeness remains `unknown`
+unless independently verified.
+
+Strict validation is opt-in through `vnthuquan validate --strict` or
+`vnthuquan download --strict-verify`. It turns selected structural warnings into
+errors, including missing PDF EOF markers, HTML-looking text exports, missing
+EPUB TOC/nav entries, demo/sample markers, and audio manifests that do not match
+bundled MP3 files.
+
+Image-format entries are searchable and listable, but they do not yet have an
+executable download path because the live site does not expose one stable
+ebook-level image asset route.
 
 ## MVP Boundaries
 
-MVP supports EPUB downloads only. PDF, audio, text export, bulk downloads, cache,
-top lists, and parallelism are deferred.
+Bulk downloads, native per-category/per-author top routes, and parallelism are
+deferred. A small TTL cache and request pacing foundation exists for future
+bulk/parallel work.
 
 ## Safety
 

@@ -6,6 +6,7 @@
 - Import package: `vnthuquan`
 - CLI command: `vnthuquan`
 - Initial version: `0.1.0`
+- Current package version: `0.1.1`
 - Python: `>=3.10`
 - License: `GPL-3.0-or-later`
 
@@ -17,8 +18,8 @@ Supported in the first version:
 - search by one or more titles, authors, author IDs, categories, formats, or all fields
 - show
 - `show --links`
-- EPUB download
-- EPUB validation
+- EPUB, PDF, generated text, and audio download
+- EPUB, PDF, text, and audio validation
 - categories list/show
 - formats list
 - latest/newly added ebook listing
@@ -37,13 +38,35 @@ Deferred:
 
 - bulk category downloads
 - native per-category/per-author top routes if the site adds them later
-- PDF/audio/text downloads
-- text export
-- persistent cache
 - parallel downloads
 - resource auto-tuning
 - shell completion
 - about command
+
+## 0.1.1 Hardening Scope
+
+Objective: tighten download reliability and release hygiene without adding bulk
+or parallel download commands.
+
+Assumptions:
+
+- `--execute` remains the only switch that writes final files.
+- `dry_run` stays in the Python API for compatibility, but `execute` controls
+  writes.
+- User-pinned `--mirror` must not silently switch mirrors.
+
+Tasks:
+
+- Bump package metadata to `0.1.1`.
+- Route direct and audio downloads through the adapter session so cookies,
+  headers, retries, request pacing, and optional cache settings are consistent.
+- Implement mirror failover for download and validation failures, disabled by
+  `--no-failover` or a pinned `--mirror`.
+- Add opt-in strict validation for CLI and Python callers.
+- Add request pacing and optional TTL cache settings before future bulk or
+  parallel work.
+- Add opt-in live smoke tests and CI for lint, tests, and package builds.
+- Update README and Sphinx documentation.
 
 ## Architecture
 
@@ -137,7 +160,12 @@ Global flags:
 `show` and `download` accept exactly one selector: `--title`, `--url`, or `--id`.
 
 `download` is dry-run by default. `--execute` is required before final files are
-written. MVP actual downloads support EPUB only.
+written. Executable download formats are:
+
+- `epub`: direct EPUB asset
+- `pdf`: direct PDF source exposed by the site reader, with a warning when the reader marks download disabled
+- `text`: generated UTF-8 text export assembled from the site's chapter reader
+- `audio`: ZIP bundle containing all discovered MP3 assets plus `manifest.json`
 
 ## Link Sharing
 
@@ -182,6 +210,15 @@ Validation reports separate facts:
 
 `content_completeness` defaults to `unknown`.
 
+Additional format validation checks:
+
+- PDF: byte count, SHA256, `%PDF-` header, EOF marker warning, readable payload size
+- text: SHA256, UTF-8 decoding, readable text length, demo/sample-marker scan
+- audio: ZIP integrity, MP3 entry count, MP3 header checks, SHA256
+
+Text export validation proves only that the generated file is readable. It does
+not prove that the source site has every canonical chapter.
+
 ## Download Safety
 
 Download folder resolution:
@@ -195,6 +232,9 @@ Folders are created only with `--execute`. Downloads write `.partial` first and
 atomically rename after validation. Existing same-SHA256 files are skipped.
 Existing different files fail unless `--overwrite` is supplied.
 
+`--strict-verify` applies stricter validation after a download. The Python API
+passes this as `strict_verify=True`.
+
 ## Mirrors
 
 Known mirrors:
@@ -202,8 +242,8 @@ Known mirrors:
 - `http://vietnamthuquan.eu`
 - `http://vnthuquan.net`
 
-Failover re-discovers assets on the new mirror first. Host substitution is last
-resort and must be reported. User-pinned `--mirror` is not silently changed.
+Download failover re-discovers assets on the new mirror first. Host
+substitution is avoided. User-pinned `--mirror` is not silently changed.
 
 ## Categories And Formats
 
@@ -358,7 +398,8 @@ The default virtual environment path is `~/.vnthuquan`.
 
 - Dry-run by default.
 - Conservative retries/timeouts.
-- Rate limiting before future bulk/parallel work.
+- Conservative request pacing before future bulk/parallel work.
+- Optional TTL cache for non-streaming adapter requests.
 - Users are responsible for rights and permissions.
 - The tool discovers live exposed links and does not guess private paths.
 
@@ -376,6 +417,8 @@ The default virtual environment path is `~/.vnthuquan`.
 10. Add mirrors/config/doctor.
 11. Add read-only categories/formats.
 12. Add read-only listing APIs and `vnthuquan list` CLI.
-13. Update README and Sphinx docs for listing examples.
-14. Verify tests and docs locally.
-15. Configure GitHub Pages via `gh` after repository setup.
+13. Add PDF, generated text, and audio ZIP download paths.
+14. Add PDF, text, and audio validation.
+15. Update README and Sphinx docs for listing and download examples.
+16. Verify tests and docs locally.
+17. Configure GitHub Pages via `gh` after repository setup.

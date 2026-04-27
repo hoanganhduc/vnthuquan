@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from .client import VnThuQuanClient
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "Duc A. Hoang (hoanganhduc)"
 __email__ = "anhduc.hoang1990@gmail.com"
-__description__ = "Python wrapper and CLI for Vietnam Thu Quan ebook discovery and EPUB downloads"
+__description__ = "Python wrapper and CLI for Vietnam Thu Quan ebook discovery and downloads"
 
 
 def get_version() -> str:

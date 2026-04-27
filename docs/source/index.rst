@@ -2,7 +2,7 @@ vnthuquan Documentation
 =======================
 
 ``vnthuquan`` is a Python wrapper and CLI for Vietnam Thu Quan ebook discovery
-and EPUB downloads.
+and EPUB, PDF, text, and audio downloads.
 
 Latest update: |last_updated|
 

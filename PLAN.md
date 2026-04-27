@@ -14,21 +14,29 @@
 Supported in the first version:
 
 - search
+- search by one or more titles, authors, author IDs, categories, formats, or all fields
 - show
 - `show --links`
 - EPUB download
 - EPUB validation
 - categories list/show
 - formats list
+- latest/newly added ebook listing
+- author listing by initial
+- title-initial ebook listing
+- most-viewed ebook listing
+- five-star/rated ebook listing
+- category, author, and format ebook listing through a unified `list` command
+- derived top lists by category or author with explicit scan limits
 - mirrors
 - config
 - doctor
-- documentation and install scripts
+- README updates, Sphinx documentation updates, and install scripts
 
 Deferred:
 
 - bulk category downloads
-- top lists
+- native per-category/per-author top routes if the site adds them later
 - PDF/audio/text downloads
 - text export
 - persistent cache
@@ -76,7 +84,20 @@ Titles are user-facing labels, not internal identity.
 ## Core API
 
 - `live_check(mirror=None)`
-- `search(query, field="title", format=None, limit=None, page=1)`
+- `search(query=None, field="title", format=None, formats=None, category=None, categories=None, author_id=None, author_ids=None, titles=None, authors=None, limit=None, page=1, exact=False)`
+- `search_by_title(title_or_titles, exact=False, format=None, formats=None, limit=None)`
+- `search_by_author(author_or_authors, exact=False, format=None, formats=None, limit=None)`
+- `search_by_author_id(author_id_or_ids, query=None, field="all", format=None, formats=None, limit=None, page=1, exact=False)`
+- `search_by_category(category_or_categories, query=None, field="all", format=None, formats=None, limit=None, page=1, exact=False)`
+- `search_all(query_or_queries, format=None, formats=None, limit=None, exact=False)`
+- `list_by_format(format_or_formats, limit=None, page=1)`
+- `list_latest(format=None, formats=None, limit=None, page=1)`
+- `list_authors(initial, limit=None, page=1)`
+- `list_by_title_initial(initial, format=None, formats=None, limit=None, page=1)`
+- `list_most_viewed(format=None, formats=None, limit=None, page=1)`
+- `list_five_star(format=None, formats=None, limit=None, page=1)`
+- `list_top_by_category(category, source="most-viewed", scan_pages=10, format=None, formats=None, limit=20)`
+- `list_top_by_author(author_id=None, author=None, source="most-viewed", scan_pages=10, format=None, formats=None, limit=20)`
 - `show(selector, assets=False, links=False)`
 - `discover_assets(book)`
 - `get_asset_links(book, formats=None)`
@@ -95,6 +116,7 @@ MVP commands:
 - `vnthuquan show`
 - `vnthuquan download`
 - `vnthuquan validate`
+- `vnthuquan list`
 - `vnthuquan categories`
 - `vnthuquan formats`
 - `vnthuquan mirrors`
@@ -185,11 +207,24 @@ resort and must be reported. User-pinned `--mirror` is not silently changed.
 
 ## Categories And Formats
 
-MVP category/format commands are read-only:
+Category, author, title-initial, ranking, and format commands are read-only:
 
+- `vnthuquan list latest --page 1 --limit 20`
+- `vnthuquan list authors --initial A --page 1`
+- `vnthuquan list title-initial A --format epub`
+- `vnthuquan list most-viewed --page 1`
+- `vnthuquan list five-star --page 1`
+- `vnthuquan list category 23 --format epub`
+- `vnthuquan list author 284 --format epub`
+- `vnthuquan list format epub --page 1`
+- `vnthuquan list top --category 6 --source most-viewed --scan-pages 20`
+- `vnthuquan list top --author-id 284 --source most-viewed --scan-pages 20`
 - `vnthuquan categories list`
 - `vnthuquan categories show 23`
 - `vnthuquan formats list`
+- `vnthuquan search --category 23 --format epub --page 1`
+- `vnthuquan search --format pdf,epub --page 1`
+- `vnthuquan search --author "Kim Dung" --author "Chu Lai" --format epub --format pdf`
 
 Format IDs:
 
@@ -199,7 +234,24 @@ Format IDs:
 - audio: `3`
 - epub: `4`
 
-Category + format filtering and bulk category downloads are deferred.
+Category + format filtering is supported for search/listing. Bulk category
+downloads are deferred.
+
+Native site list routes confirmed:
+
+- `/truyen/default.aspx?tranghientai=N` for latest/newly added books
+- `/truyen/tacgia.aspx?tacgia=A&tranghientai=N` for authors by initial
+- `/truyen/mautu.aspx?tua=A&tranghientai=N` for titles by initial
+- `/truyen/xemnhieu.aspx?tranghientai=N` for global most-viewed books
+- `/truyen/Namsao_moi.aspx?tranghientai=N` for global five-star/rated books
+- `/truyen/theloai.aspx?theloaiid=ID&tranghientai=N` for category books
+- `/truyen/tacpham.aspx?tacgiaid=ID&tranghientai=N` for author books
+- `/truyen/dangsach.aspx?dangsach=ID&tranghientai=N` for format books
+
+Top-by-category and top-by-author are derived by scanning global ranked lists
+and filtering locally because the live site ignores category/author parameters
+on the global ranking routes. CLI output and docs must make this scan limit
+explicit.
 
 ## Failure Handling
 
@@ -274,6 +326,12 @@ Generate:
 Document only MVP as supported. Deferred features belong in a future-work
 section.
 
+When list features change, update both:
+
+- README quick examples
+- Sphinx usage, CLI reference, categories/listing docs, and project
+  documentation
+
 ## GitHub Pages
 
 Add `.github/workflows/docs.yml` to build Sphinx docs and publish HTML to a
@@ -317,5 +375,7 @@ The default virtual environment path is `~/.vnthuquan`.
 9. Implement `validate PATH`.
 10. Add mirrors/config/doctor.
 11. Add read-only categories/formats.
-12. Verify tests and docs locally.
-13. Configure GitHub Pages via `gh` after repository setup.
+12. Add read-only listing APIs and `vnthuquan list` CLI.
+13. Update README and Sphinx docs for listing examples.
+14. Verify tests and docs locally.
+15. Configure GitHub Pages via `gh` after repository setup.

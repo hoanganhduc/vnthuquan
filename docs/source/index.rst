@@ -16,5 +16,6 @@ Latest update: |last_updated|
    validation
    mirrors
    categories
+   listing
    api_reference
    project_documentation

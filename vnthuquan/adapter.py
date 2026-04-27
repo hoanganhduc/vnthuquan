@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 
 from .errors import AssetDiscoveryError, LiveCheckError, NotFoundError, ParseError, SearchError
 from .mirrors import DEFAULT_MIRROR, normalize_mirror
-from .models import BookMetadata, Category, FormatCategory, LinkInfo, MirrorStatus, SearchResult
+from .models import Author, BookMetadata, Category, FormatCategory, LinkInfo, MirrorStatus, SearchResult
 
 FORMAT_IDS = {
     "text": 0,
@@ -88,6 +88,26 @@ def _tid_from_url(url: str) -> str:
     if not tid:
         raise ParseError(f"Could not find tid in URL: {url}")
     return tid
+
+
+def _int_param_from_url(url: str, key: str) -> int | None:
+    query = parse_qs(urlparse(url).query)
+    value = query.get(key, [None])[0]
+    return int(value) if value and value.isdigit() else None
+
+
+def _int_from_text(value: str | None) -> int | None:
+    if not value:
+        return None
+    digits = re.sub(r"\D+", "", value)
+    return int(digits) if digits else None
+
+
+def _date_from_text(value: str | None) -> str | None:
+    if not value:
+        return None
+    match = re.search(r"\b\d{1,2}\.\d{1,2}\.\d{4}\b", value)
+    return match.group(0) if match else None
 
 
 def _clean_title(title: str, fmt: str | None = None) -> str:
@@ -167,7 +187,7 @@ class LegacySiteAdapter:
         self,
         query: str,
         field: str = "title",
-        format: str | None = None,
+        format: str | list[str] | None = None,
         limit: int | None = None,
     ) -> list[SearchResult]:
         field_map = {"title": "tua", "author": "tacgia"}
@@ -183,13 +203,171 @@ class LegacySiteAdapter:
         if not response.ok:
             raise SearchError(f"Search failed with HTTP {response.status_code}")
         results = self._parse_listing(response.text)
-        if format:
-            results = [
-                result
-                for result in results
-                if (result.format or "").lower() == format.lower()
-                or format.lower() in (result.title or "").lower()
-            ]
+        results = self._filter_format(results, format)
+        return results[:limit] if limit else results
+
+    def list_author_books(
+        self,
+        author_id: str | int,
+        format: str | list[str] | None = None,
+        page: int = 1,
+        limit: int | None = None,
+    ) -> list[SearchResult]:
+        if page < 1:
+            raise SearchError("Author page must be >= 1")
+        response = self._request(
+            "GET",
+            self._url(f"/truyen/tacpham.aspx?tranghientai={page}&tacgiaid={author_id}"),
+        )
+        if not response.ok:
+            raise SearchError(f"Author listing failed with HTTP {response.status_code}")
+        results = self._parse_listing(response.text)
+        author_name = self._parse_author_name(response.text)
+        author_id_int = int(author_id) if str(author_id).isdigit() else None
+        for result in results:
+            if result.author is None:
+                result.author = author_name
+            if result.author_id is None:
+                result.author_id = author_id_int
+        results = self._filter_format(results, format)
+        return results[:limit] if limit else results
+
+    def list_latest_books(
+        self,
+        format: str | list[str] | None = None,
+        page: int = 1,
+        limit: int | None = None,
+    ) -> list[SearchResult]:
+        if page < 1:
+            raise SearchError("Latest page must be >= 1")
+        response = self._request(
+            "GET",
+            self._url(f"/truyen/default.aspx?tranghientai={page}"),
+        )
+        if not response.ok:
+            raise SearchError(f"Latest listing failed with HTTP {response.status_code}")
+        results = self._parse_listing(response.text)
+        results = self._filter_format(results, format)
+        return results[:limit] if limit else results
+
+    def list_title_initial_books(
+        self,
+        initial: str,
+        format: str | list[str] | None = None,
+        page: int = 1,
+        limit: int | None = None,
+    ) -> list[SearchResult]:
+        if page < 1:
+            raise SearchError("Title-initial page must be >= 1")
+        initial = self._normalize_initial(initial)
+        response = self._request(
+            "GET",
+            self._url(f"/truyen/mautu.aspx?tranghientai={page}&tua={quote(initial)}"),
+        )
+        if not response.ok:
+            raise SearchError(f"Title-initial listing failed with HTTP {response.status_code}")
+        results = self._parse_listing(response.text)
+        results = self._filter_format(results, format)
+        return results[:limit] if limit else results
+
+    def list_most_viewed_books(
+        self,
+        format: str | list[str] | None = None,
+        page: int = 1,
+        limit: int | None = None,
+    ) -> list[SearchResult]:
+        if page < 1:
+            raise SearchError("Most-viewed page must be >= 1")
+        response = self._request(
+            "GET",
+            self._url(f"/truyen/xemnhieu.aspx?tranghientai={page}"),
+        )
+        if not response.ok:
+            raise SearchError(f"Most-viewed listing failed with HTTP {response.status_code}")
+        results = self._parse_listing(response.text)
+        results = self._filter_format(results, format)
+        return results[:limit] if limit else results
+
+    def list_five_star_books(
+        self,
+        format: str | list[str] | None = None,
+        page: int = 1,
+        limit: int | None = None,
+    ) -> list[SearchResult]:
+        if page < 1:
+            raise SearchError("Five-star page must be >= 1")
+        response = self._request(
+            "GET",
+            self._url(f"/truyen/Namsao_moi.aspx?tranghientai={page}"),
+        )
+        if not response.ok:
+            raise SearchError(f"Five-star listing failed with HTTP {response.status_code}")
+        results = self._parse_listing(response.text)
+        results = self._filter_format(results, format)
+        return results[:limit] if limit else results
+
+    def list_authors(
+        self,
+        initial: str,
+        page: int = 1,
+        limit: int | None = None,
+    ) -> list[Author]:
+        if page < 1:
+            raise SearchError("Author page must be >= 1")
+        initial = self._normalize_initial(initial)
+        response = self._request(
+            "GET",
+            self._url(f"/truyen/tacgia.aspx?tranghientai={page}&tacgia={quote(initial)}"),
+        )
+        if not response.ok:
+            raise SearchError(f"Author listing failed with HTTP {response.status_code}")
+        authors = self._parse_authors(response.text, initial=initial)
+        return authors[:limit] if limit else authors
+
+    def list_category_books(
+        self,
+        category: str | int,
+        format: str | list[str] | None = None,
+        page: int = 1,
+        limit: int | None = None,
+    ) -> list[SearchResult]:
+        if page < 1:
+            raise SearchError("Category page must be >= 1")
+        category_info = self.get_category(category)
+        response = self._request(
+            "GET",
+            self._url(f"/truyen/theloai.aspx?tranghientai={page}&theloaiid={category_info.id}"),
+        )
+        if not response.ok:
+            raise SearchError(f"Category listing failed with HTTP {response.status_code}")
+        results = self._parse_listing(response.text)
+        for result in results:
+            if result.category_id is None:
+                result.category_id = category_info.id
+            if result.category_name is None:
+                result.category_name = category_info.name
+        results = self._filter_format(results, format)
+        return results[:limit] if limit else results
+
+    def list_format_books(
+        self,
+        format: str,
+        page: int = 1,
+        limit: int | None = None,
+    ) -> list[SearchResult]:
+        if page < 1:
+            raise SearchError("Format page must be >= 1")
+        fmt_id = FORMAT_IDS.get(format.lower())
+        if fmt_id is None:
+            raise SearchError(f"Unsupported format: {format}")
+        response = self._request(
+            "GET",
+            self._url(f"/truyen/dangsach.aspx?tranghientai={page}&dangsach={fmt_id}"),
+        )
+        if not response.ok:
+            raise SearchError(f"Format listing failed with HTTP {response.status_code}")
+        results = self._parse_listing(response.text)
+        results = self._filter_format(results, format)
         return results[:limit] if limit else results
 
     def get_book(self, url_or_tid: str) -> BookMetadata:
@@ -278,7 +456,11 @@ class LegacySiteAdapter:
                 continue
             seen.add(tid)
             title = _text(item.select_one(".truyen-title a")) or _text(item.find("img")) or tid
-            author = _text(item.select_one(".author"))
+            author_anchor = item.select_one(".author a")
+            author = _text(author_anchor) or _text(item.select_one(".author"))
+            author_id = None
+            if author_anchor:
+                author_id = _int_param_from_url(author_anchor.get("href", ""), "tacgiaid")
             fmt = _text(item.select_one(".label-scan"))
             fmt = fmt.lower() if fmt else None
             date_or_views = _text(item.select_one(".label-time"))
@@ -297,12 +479,90 @@ class LegacySiteAdapter:
                     format=fmt,
                     url=url,
                     mirror=self.mirror,
+                    author_id=author_id,
                     category_id=category_id,
                     category_name=category_name,
                     date_or_views=date_or_views,
+                    added_date=_date_from_text(date_or_views),
+                    views=_int_from_text(date_or_views) if date_or_views and "xem" in date_or_views.casefold() else None,
                 )
             )
         return results
+
+    def _parse_authors(self, html: str, initial: str | None = None) -> list[Author]:
+        soup = BeautifulSoup(html, "html.parser")
+        authors: list[Author] = []
+        seen: set[tuple[int | None, str]] = set()
+        for anchor in soup.find_all("a", href=re.compile(r"tacpham\.aspx\?tacgiaid=")):
+            name = _text(anchor)
+            if not name:
+                continue
+            url = urljoin(self._url("/truyen/"), anchor["href"])
+            author_id = _int_param_from_url(url, "tacgiaid")
+            key = (author_id, name.casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            authors.append(
+                Author(
+                    name=name,
+                    id=author_id,
+                    url=url if author_id is not None else None,
+                    mirror=self.mirror,
+                    initial=initial,
+                )
+            )
+        return authors
+
+    def _filter_format(
+        self,
+        results: list[SearchResult],
+        format: str | list[str] | None = None,
+    ) -> list[SearchResult]:
+        formats = self._normalize_formats(format)
+        if not formats:
+            return results
+        return [
+            result
+            for result in results
+            if (result.format or "").lower() in formats
+            or any(fmt in (result.title or "").lower() for fmt in formats)
+        ]
+
+    def _normalize_formats(self, format: str | list[str] | None = None) -> list[str]:
+        if not format:
+            return []
+        raw_values = [format] if isinstance(format, str) else list(format)
+        values: list[str] = []
+        for raw in raw_values:
+            for part in str(raw).split(","):
+                value = part.strip().lower()
+                if value:
+                    values.append(value)
+        unsupported = [value for value in values if value not in FORMAT_IDS]
+        if unsupported:
+            raise SearchError(f"Unsupported format: {', '.join(unsupported)}")
+        return list(dict.fromkeys(values))
+
+    def _normalize_initial(self, initial: str) -> str:
+        value = initial.strip()
+        if not value:
+            raise SearchError("Initial must not be empty")
+        if value.casefold() in {"#", "number", "numbers", "num", "0-9"}:
+            return "1"
+        return value[0]
+
+    def _parse_author_name(self, html: str) -> str | None:
+        soup = BeautifulSoup(html, "html.parser")
+        for heading in soup.find_all(["h1", "h2", "h3"]):
+            text = _text(heading)
+            if not text:
+                continue
+            normalized = re.sub(r"\s+", " ", text)
+            match = re.search(r"T\s*ác\s+Giả:\s*(.+)", normalized, flags=re.I)
+            if match:
+                return match.group(1).strip()
+        return None
 
     def _parse_book_detail(self, html: str, url: str) -> BookMetadata:
         tid = _tid_from_url(url)

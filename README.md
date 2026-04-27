@@ -33,12 +33,15 @@ can be proven structurally without claiming canonical completeness.
 Supported in `0.1.0`:
 
 - search books
+- search by one or more titles, authors, author IDs, categories, formats, or all fields
 - show metadata
 - show reader/direct links
 - dry-run EPUB downloads
 - execute EPUB downloads with validation
 - validate saved EPUB files
 - list categories and formats
+- list latest books, authors, title initials, most-viewed books, five-star books, category books, author books, and format books
+- derive top books by category or author from bounded scans of global ranked lists
 - check mirrors and basic environment health
 
 Deferred:
@@ -46,7 +49,7 @@ Deferred:
 - PDF/audio/text downloads
 - text export
 - bulk category downloads
-- top lists
+- native per-category/per-author top routes if the site adds them later
 - persistent cache
 - parallel downloads
 
@@ -70,10 +73,112 @@ vnthuquan --help
 
 ## Quick Usage
 
-Search:
+Search with one selector:
 
 ```bash
 vnthuquan search "cthulhu"
+vnthuquan search --title "Mưa Đỏ" --exact
+vnthuquan search --author "Kim Dung" --format epub
+vnthuquan search --category 23 --format epub --page 1 --limit 10
+```
+
+Use repeated flags when you want more than one value. Values within the same
+selector are combined as OR filters:
+
+```bash
+vnthuquan search --title "Mưa Đỏ" --title "Ăn Mày Dĩ Vãng"
+vnthuquan search --author "Kim Dung" --author "Chu Lai" --format epub --format pdf
+vnthuquan search --author-id 42 --author-id 1600 --limit 10
+vnthuquan search --category 23 --category 26 --format epub --limit 10
+```
+
+Formats can be repeated or comma-separated:
+
+```bash
+vnthuquan search --author "Kim Dung" --format pdf,epub
+vnthuquan search --author "Kim Dung" --format pdf --format epub
+```
+
+Combine different filter families when the site exposes enough metadata. For
+example, this searches two authors, keeps only EPUB/PDF results, and limits the
+display:
+
+```bash
+vnthuquan search \
+  --author "Kim Dung" \
+  --author "Chu Lai" \
+  --format epub,pdf \
+  --limit 10
+```
+
+Search title and author fields together:
+
+```bash
+vnthuquan search "Chu Lai" --all --limit 10
+vnthuquan search "Mưa Đỏ" "Thiên Long Bát Bộ" --all --format epub
+```
+
+List by category, author ID, or format:
+
+```bash
+vnthuquan categories list
+vnthuquan categories show 23
+vnthuquan formats list
+vnthuquan list category 23 --format epub --page 1
+vnthuquan list author 284 --format epub --page 1
+vnthuquan list format epub --page 1 --limit 10
+vnthuquan search --category 23 --category 26 --format epub --page 1
+vnthuquan search --author-id 42 --author-id 1600 --format epub --page 1
+vnthuquan search --format pdf,epub --page 1 --limit 10
+```
+
+List site indexes and rankings:
+
+```bash
+vnthuquan list latest --page 1 --limit 10
+vnthuquan list authors --initial A --page 1
+vnthuquan list title-initial A --format epub --page 1
+vnthuquan list most-viewed --page 1 --limit 10
+vnthuquan list five-star --page 1 --limit 10
+```
+
+Derived top lists scan global ranked pages and filter locally because the site
+does not expose native per-category or per-author ranking routes:
+
+```bash
+vnthuquan list top --category 6 --source most-viewed --scan-pages 20 --limit 10
+vnthuquan list top --author-id 284 --source most-viewed --scan-pages 20 --limit 10
+```
+
+Return machine-readable output:
+
+```bash
+vnthuquan --json search --title "Mưa Đỏ" --title "Thiên Long Bát Bộ" --format epub
+vnthuquan --json list authors --initial A --page 1
+```
+
+Python wrapper examples:
+
+```python
+from vnthuquan import VnThuQuanClient
+
+client = VnThuQuanClient()
+
+results = client.search(
+    titles=["Mưa Đỏ", "Thiên Long Bát Bộ"],
+    formats=["epub"],
+    limit=10,
+)
+
+author_results = client.search_by_author(
+    ["Kim Dung", "Chu Lai"],
+    formats="epub,pdf",
+    limit=10,
+)
+
+latest = client.list_latest(limit=10)
+authors = client.list_authors("A", limit=30)
+top_kiem_hiep = client.list_top_by_category(6, source="most-viewed", scan_pages=20, limit=10)
 ```
 
 Show metadata and links:
@@ -85,13 +190,21 @@ vnthuquan show --title "Lời hiệu triệu của Cthulhu" --links
 Dry-run a download:
 
 ```bash
-vnthuquan download --title "Lời hiệu triệu của Cthulhu" --format epub --out ~/Downloads
+vnthuquan download \
+  --title "Lời hiệu triệu của Cthulhu" \
+  --format epub \
+  --out ~/Downloads \
+  --dry-run
 ```
 
 Execute a download:
 
 ```bash
-vnthuquan download --title "Lời hiệu triệu của Cthulhu" --format epub --out ~/Downloads --execute
+vnthuquan download \
+  --title "Lời hiệu triệu của Cthulhu" \
+  --format epub \
+  --out ~/Downloads \
+  --execute
 ```
 
 Validate an EPUB:

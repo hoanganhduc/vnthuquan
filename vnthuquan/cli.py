@@ -10,7 +10,7 @@ from typing import Any
 
 from . import __description__, __version__
 from .client import VnThuQuanClient
-from .config import default_config_path, load_config, save_config, set_config_value, unset_config_value
+from .config import default_config_path, load_config, set_config_value, unset_config_value
 from .errors import VnThuQuanError
 from .mirrors import DEFAULT_MIRROR
 
@@ -74,10 +74,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
-    search = subparsers.add_parser("search", help="Search books")
-    search.add_argument("query")
-    search.add_argument("--field", choices=["title", "author"], default="title")
-    search.add_argument("--format", choices=["text", "epub", "pdf", "audio", "image"])
+    search = subparsers.add_parser("search", help="Search or list books")
+    search.add_argument("query", nargs="*", help="Search query; repeat for multiple title/all-field queries")
+    search.add_argument("--title", action="append", help="Search by title; repeat for multiple titles")
+    search.add_argument("--author", action="append", help="Search by author; repeat for multiple authors")
+    search.add_argument("--author-id", action="append", help="List or search books by author ID; repeat for multiple IDs")
+    search.add_argument("--category", action="append", help="List or search within a category; repeat for multiple categories")
+    search.add_argument(
+        "--field",
+        choices=["title", "author", "category", "author-id", "author_id", "all"],
+        default="title",
+    )
+    search.add_argument("--all", action="store_true", help="Search title and author fields")
+    search.add_argument("--exact", action="store_true", help="Require exact title/author matches")
+    search.add_argument("--format", action="append", help="Filter by format; repeat or use comma-separated values")
     search.add_argument("--limit", type=int)
     search.add_argument("--page", type=int, default=1)
     search.set_defaults(func=cmd_search)
@@ -111,6 +121,48 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("path")
     validate.add_argument("--format", default="auto", choices=["auto", "epub"])
     validate.set_defaults(func=cmd_validate)
+
+    list_cmd = subparsers.add_parser("list", help="List site indexes and ranked book lists")
+    list_sub = list_cmd.add_subparsers(dest="list_command", required=True)
+    list_latest = list_sub.add_parser("latest", help="List latest/newly added books")
+    _add_listing_args(list_latest, include_format=True)
+    list_latest.set_defaults(func=cmd_list_latest)
+    list_authors = list_sub.add_parser("authors", help="List authors by initial")
+    list_authors.add_argument("--initial", required=True, help="Initial letter; use # for numeric authors")
+    _add_listing_args(list_authors)
+    list_authors.set_defaults(func=cmd_list_authors)
+    list_title_initial = list_sub.add_parser("title-initial", help="List books by title initial")
+    list_title_initial.add_argument("initial", help="Initial letter; use # for numeric titles")
+    _add_listing_args(list_title_initial, include_format=True)
+    list_title_initial.set_defaults(func=cmd_list_title_initial)
+    list_most_viewed = list_sub.add_parser("most-viewed", help="List most-viewed books")
+    _add_listing_args(list_most_viewed, include_format=True)
+    list_most_viewed.set_defaults(func=cmd_list_most_viewed)
+    list_five_star = list_sub.add_parser("five-star", help="List five-star/rated books")
+    _add_listing_args(list_five_star, include_format=True)
+    list_five_star.set_defaults(func=cmd_list_five_star)
+    list_category = list_sub.add_parser("category", help="List books in a category")
+    list_category.add_argument("category", help="Category ID or exact category name")
+    _add_listing_args(list_category, include_format=True)
+    list_category.set_defaults(func=cmd_list_category)
+    list_author = list_sub.add_parser("author", help="List books by author ID")
+    list_author.add_argument("author_id", help="Author ID")
+    _add_listing_args(list_author, include_format=True)
+    list_author.set_defaults(func=cmd_list_author)
+    list_format = list_sub.add_parser("format", help="List books by format")
+    list_format.add_argument("format", choices=["text", "image", "pdf", "audio", "epub"])
+    _add_listing_args(list_format)
+    list_format.set_defaults(func=cmd_list_format)
+    list_top = list_sub.add_parser("top", help="List derived top books by category or author")
+    target = list_top.add_mutually_exclusive_group(required=True)
+    target.add_argument("--category", help="Category ID or exact category name")
+    target.add_argument("--author-id", help="Author ID")
+    target.add_argument("--author", help="Exact author name")
+    list_top.add_argument("--source", default="most-viewed", choices=["most-viewed", "five-star"])
+    list_top.add_argument("--scan-pages", type=int, default=10, help="Number of ranked pages to scan before filtering")
+    list_top.add_argument("--format", action="append", help="Filter by format; repeat or use comma-separated values")
+    list_top.add_argument("--limit", type=int, default=20)
+    list_top.set_defaults(func=cmd_list_top)
 
     categories = subparsers.add_parser("categories", help="List or inspect categories")
     category_sub = categories.add_subparsers(dest="category_command", required=True)
@@ -164,17 +216,70 @@ def _add_selector_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--id", help="Resolve by tid")
 
 
+def _add_listing_args(parser: argparse.ArgumentParser, include_format: bool = False) -> None:
+    parser.add_argument("--page", type=int, default=1)
+    parser.add_argument("--limit", type=int)
+    if include_format:
+        parser.add_argument("--format", action="append", help="Filter by format; repeat or use comma-separated values")
+
+
+def _print_results(results: list[Any]) -> None:
+    for idx, result in enumerate(results):
+        author = f" - {result.author}" if result.author else ""
+        fmt = f" [{result.format}]" if result.format else ""
+        print(f"[{idx}] {result.title}{author}{fmt}")
+        if result.category_name:
+            print(f"    Category: {result.category_name}")
+        if result.views is not None:
+            print(f"    Views: {result.views}")
+        elif result.added_date:
+            print(f"    Date: {result.added_date}")
+        print(f"    {result.url}")
+
+
+def _print_authors(authors: list[Any]) -> None:
+    for idx, author in enumerate(authors):
+        author_id = author.id if author.id is not None else "unknown"
+        print(f"[{idx}] {author.name} (id={author_id})")
+        if author.url:
+            print(f"    {author.url}")
+
+
 def cmd_search(args: argparse.Namespace) -> int:
     client = _client(args)
-    results = client.search(args.query, field=args.field, format=args.format, limit=args.limit, page=args.page)
+    query = list(args.query or [])
+    field = args.field
+    if args.all:
+        field = "all"
+    titles = list(args.title or [])
+    authors = list(args.author or [])
+    if field == "title" and query and not args.all:
+        titles.extend(query)
+        query = []
+    elif field == "author" and query and not args.all:
+        authors.extend(query)
+        query = []
+    if args.author_id:
+        if field in {"category"}:
+            raise argparse.ArgumentTypeError("--field category requires --category")
+    if args.category and field == "category":
+        field = "all"
+    results = client.search(
+        query,
+        field=field,
+        titles=titles,
+        authors=authors,
+        formats=args.format,
+        categories=args.category,
+        author_ids=args.author_id,
+        limit=args.limit,
+        page=args.page,
+        exact=args.exact,
+    )
     if args.json:
         _emit({"ok": True, "results": results}, True)
     else:
-        for idx, result in enumerate(results):
-            author = f" - {result.author}" if result.author else ""
-            fmt = f" [{result.format}]" if result.format else ""
-            print(f"[{idx}] {result.title}{author}{fmt}")
-            print(f"    {result.url}")
+        _print_results(results)
     return 0
 
 
@@ -275,6 +380,117 @@ def cmd_validate(args: argparse.Namespace) -> int:
             for error in result.errors:
                 print(f"- {error}")
     return 0 if result.ok else 7
+
+
+def cmd_list_latest(args: argparse.Namespace) -> int:
+    results = _client(args).list_latest(formats=args.format, limit=args.limit, page=args.page)
+    if args.json:
+        _emit({"ok": True, "results": results}, True)
+    else:
+        _print_results(results)
+    return 0
+
+
+def cmd_list_authors(args: argparse.Namespace) -> int:
+    authors = _client(args).list_authors(args.initial, limit=args.limit, page=args.page)
+    if args.json:
+        _emit({"ok": True, "authors": authors}, True)
+    else:
+        _print_authors(authors)
+    return 0
+
+
+def cmd_list_title_initial(args: argparse.Namespace) -> int:
+    results = _client(args).list_by_title_initial(args.initial, formats=args.format, limit=args.limit, page=args.page)
+    if args.json:
+        _emit({"ok": True, "results": results}, True)
+    else:
+        _print_results(results)
+    return 0
+
+
+def cmd_list_most_viewed(args: argparse.Namespace) -> int:
+    results = _client(args).list_most_viewed(formats=args.format, limit=args.limit, page=args.page)
+    if args.json:
+        _emit({"ok": True, "results": results}, True)
+    else:
+        _print_results(results)
+    return 0
+
+
+def cmd_list_five_star(args: argparse.Namespace) -> int:
+    results = _client(args).list_five_star(formats=args.format, limit=args.limit, page=args.page)
+    if args.json:
+        _emit({"ok": True, "results": results}, True)
+    else:
+        _print_results(results)
+    return 0
+
+
+def cmd_list_category(args: argparse.Namespace) -> int:
+    results = _client(args).list_by_category(args.category, formats=args.format, limit=args.limit, page=args.page)
+    if args.json:
+        _emit({"ok": True, "results": results}, True)
+    else:
+        _print_results(results)
+    return 0
+
+
+def cmd_list_author(args: argparse.Namespace) -> int:
+    results = _client(args).list_by_author(args.author_id, formats=args.format, limit=args.limit, page=args.page)
+    if args.json:
+        _emit({"ok": True, "results": results}, True)
+    else:
+        _print_results(results)
+    return 0
+
+
+def cmd_list_format(args: argparse.Namespace) -> int:
+    results = _client(args).list_by_format(args.format, limit=args.limit, page=args.page)
+    if args.json:
+        _emit({"ok": True, "results": results}, True)
+    else:
+        _print_results(results)
+    return 0
+
+
+def cmd_list_top(args: argparse.Namespace) -> int:
+    client = _client(args)
+    if args.category is not None:
+        results = client.list_top_by_category(
+            args.category,
+            source=args.source,
+            scan_pages=args.scan_pages,
+            formats=args.format,
+            limit=args.limit,
+        )
+        target = {"category": args.category}
+    else:
+        results = client.list_top_by_author(
+            author_id=args.author_id,
+            author=args.author,
+            source=args.source,
+            scan_pages=args.scan_pages,
+            formats=args.format,
+            limit=args.limit,
+        )
+        target = {"author_id": args.author_id, "author": args.author}
+    if args.json:
+        _emit(
+            {
+                "ok": True,
+                "derived": True,
+                "source": args.source,
+                "scan_pages": args.scan_pages,
+                "target": target,
+                "results": results,
+            },
+            True,
+        )
+    else:
+        print(f"Derived top list from {args.source}; scanned up to {args.scan_pages} page(s).")
+        _print_results(results)
+    return 0
 
 
 def cmd_categories_list(args: argparse.Namespace) -> int:
@@ -401,6 +617,7 @@ def main(argv: list[str] | None = None) -> int:
             "show",
             "download",
             "validate",
+            "list",
             "categories",
             "formats",
             "mirrors",

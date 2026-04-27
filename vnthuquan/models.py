@@ -55,6 +55,18 @@ class FormatCategory:
 
 
 @dataclass(slots=True)
+class Author:
+    name: str
+    id: int | None
+    url: str | None
+    mirror: str
+    initial: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return _clean_dict(asdict(self))
+
+
+@dataclass(slots=True)
 class SearchResult:
     tid: str
     title: str
@@ -62,9 +74,12 @@ class SearchResult:
     format: str | None
     url: str
     mirror: str
+    author_id: int | None = None
     category_id: int | None = None
     category_name: str | None = None
     date_or_views: str | None = None
+    added_date: str | None = None
+    views: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _clean_dict(asdict(self))

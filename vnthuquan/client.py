@@ -24,6 +24,7 @@ from .errors import (
 )
 from .mirrors import list_mirrors, normalize_mirror
 from .models import (
+    Author,
     BookMetadata,
     Category,
     DownloadPlan,
@@ -56,6 +57,31 @@ def _safe_filename(value: str) -> str:
     cleaned = re.sub(r"[\\/:*?\"<>|]+", " ", value)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned or "book"
+
+
+def _as_list(value: Any, split_commas: bool = False) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        items: list[Any] = []
+        for item in value:
+            items.extend(_as_list(item, split_commas=split_commas))
+        return items
+    if split_commas and isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    return [value]
+
+
+def _unique(values: list[Any]) -> list[Any]:
+    result: list[Any] = []
+    seen: set[str] = set()
+    for value in values:
+        key = str(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(value)
+    return result
 
 
 def _clean_search_title(title: str, fmt: str | None = None) -> str:
@@ -102,15 +128,209 @@ class VnThuQuanClient:
 
     def search(
         self,
-        query: str,
+        query: str | list[str] | None = None,
         field: str = "title",
-        format: str | None = None,
+        format: str | list[str] | None = None,
+        category: str | int | list[str | int] | None = None,
+        author_id: str | int | list[str | int] | None = None,
+        titles: str | list[str] | None = None,
+        authors: str | list[str] | None = None,
+        categories: str | int | list[str | int] | None = None,
+        author_ids: str | int | list[str | int] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+        page: int = 1,
+        exact: bool = False,
+    ) -> list[SearchResult]:
+        field = field.replace("-", "_").lower()
+        format_values = self._normalize_formats(formats if formats is not None else format)
+        query_values = [str(value) for value in _as_list(query)]
+        title_values = [str(value) for value in _as_list(titles)]
+        author_values = [str(value) for value in _as_list(authors)]
+        category_values = _as_list(category) + _as_list(categories)
+        author_id_values = _as_list(author_id) + _as_list(author_ids)
+
+        if field == "author_id" and not author_id_values:
+            author_id_values.extend(query_values)
+            query_values = []
+        elif field == "category" and not category_values:
+            category_values.extend(query_values)
+            query_values = []
+        elif field == "title":
+            title_values.extend(query_values)
+            query_values = []
+        elif field == "author":
+            author_values.extend(query_values)
+            query_values = []
+        elif field != "all":
+            raise NotFoundError(f"Unsupported search field: {field}")
+
+        title_values = [str(value) for value in _unique(title_values)]
+        author_values = [str(value) for value in _unique(author_values)]
+        query_values = [str(value) for value in _unique(query_values)]
+        category_values = _unique(category_values)
+        author_id_values = _unique(author_id_values)
+
+        if category_values:
+            results: list[SearchResult] = []
+            for category_value in category_values:
+                results.extend(
+                    self.adapter.list_category_books(
+                        category_value,
+                        format=format_values,
+                        page=page,
+                    )
+                )
+            results = self._filter_author_ids(results, author_id_values)
+            results = self._filter_search_results(
+                results,
+                titles=title_values,
+                authors=author_values,
+                queries=query_values,
+                exact=exact,
+            )
+            results = self._dedupe_results(results)
+            return results[:limit] if limit else results
+
+        if author_id_values:
+            results = []
+            for author_id_value in author_id_values:
+                results.extend(
+                    self.adapter.list_author_books(
+                        author_id_value,
+                        format=format_values,
+                        page=page,
+                    )
+                )
+            results = self._filter_search_results(
+                results,
+                titles=title_values,
+                authors=author_values,
+                queries=query_values,
+                exact=exact,
+            )
+            results = self._dedupe_results(results)
+            return results[:limit] if limit else results
+
+        if title_values or author_values or query_values:
+            if page != 1:
+                raise NotFoundError("Search pagination is only supported for category, author ID, and format listings")
+            results = []
+            for title in title_values:
+                results.extend(self.adapter.search(query=title, field="title", format=format_values))
+            for author in author_values:
+                results.extend(self.adapter.search(query=author, field="author", format=format_values))
+            for value in query_values:
+                title_results = self.adapter.search(query=value, field="title", format=format_values)
+                author_results = self.adapter.search(query=value, field="author", format=format_values)
+                results.extend([*title_results, *author_results])
+            results = self._dedupe_results(results)
+            results = self._filter_search_results(
+                results,
+                titles=title_values,
+                authors=author_values,
+                queries=query_values,
+                exact=exact,
+            )
+            return results[:limit] if limit else results
+
+        if format_values:
+            results = []
+            for format_value in format_values:
+                results.extend(self.adapter.list_format_books(format=format_value, page=page))
+            results = self._dedupe_results(results)
+            return results[:limit] if limit else results
+
+        raise NotFoundError("Search requires a query, --category, --author-id, or --format")
+
+    def _normalize_formats(self, formats: str | list[str] | None = None) -> list[str]:
+        values = [str(value).lower() for value in _as_list(formats, split_commas=True)]
+        unsupported = [value for value in values if value not in FORMAT_IDS]
+        if unsupported:
+            raise UnsupportedFormatError(f"Unsupported format: {', '.join(unsupported)}")
+        return [str(value) for value in _unique(values)]
+
+    def search_by_title(
+        self,
+        title: str | list[str],
+        exact: bool = False,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+    ) -> list[SearchResult]:
+        return self.search(titles=title, exact=exact, format=format, formats=formats, limit=limit)
+
+    def search_by_author(
+        self,
+        author: str | list[str],
+        exact: bool = False,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+    ) -> list[SearchResult]:
+        return self.search(authors=author, exact=exact, format=format, formats=formats, limit=limit)
+
+    def search_by_author_id(
+        self,
+        author_id: str | int | list[str | int],
+        query: str | list[str] | None = None,
+        field: str = "all",
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+        page: int = 1,
+        exact: bool = False,
+    ) -> list[SearchResult]:
+        return self.search(
+            query,
+            field=field,
+            format=format,
+            formats=formats,
+            author_ids=author_id,
+            limit=limit,
+            page=page,
+            exact=exact,
+        )
+
+    def search_by_category(
+        self,
+        category: str | int | list[str | int],
+        query: str | list[str] | None = None,
+        field: str = "all",
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+        page: int = 1,
+        exact: bool = False,
+    ) -> list[SearchResult]:
+        return self.search(
+            query,
+            field=field,
+            format=format,
+            formats=formats,
+            categories=category,
+            limit=limit,
+            page=page,
+            exact=exact,
+        )
+
+    def list_by_format(
+        self,
+        format: str | list[str],
         limit: int | None = None,
         page: int = 1,
     ) -> list[SearchResult]:
-        if page != 1:
-            raise NotFoundError("Search pagination is not supported by the live AJAX endpoint")
-        return self.adapter.search(query=query, field=field, format=format, limit=limit)
+        return self.search(None, format=format, limit=limit, page=page)
+
+    def search_all(
+        self,
+        query: str | list[str],
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+        exact: bool = False,
+    ) -> list[SearchResult]:
+        return self.search(query, field="all", format=format, formats=formats, limit=limit, exact=exact)
 
     def show(
         self,
@@ -160,6 +380,75 @@ class VnThuQuanClient:
             preview = "; ".join(f"[{idx}] {item.title} - {item.author or 'unknown'}" for idx, item in enumerate(results[:10]))
             raise AmbiguousResultError(f"Multiple matches found. Use --index N. Matches: {preview}")
         return self.adapter.get_book(results[0].url)
+
+    def _dedupe_results(self, results: list[SearchResult]) -> list[SearchResult]:
+        deduped: list[SearchResult] = []
+        seen: set[str] = set()
+        for result in results:
+            key = result.tid or result.url
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(result)
+        return deduped
+
+    def _filter_search_results(
+        self,
+        results: list[SearchResult],
+        titles: list[str] | None = None,
+        authors: list[str] | None = None,
+        queries: list[str] | None = None,
+        exact: bool = False,
+    ) -> list[SearchResult]:
+        title_values = titles or []
+        author_values = authors or []
+        query_values = queries or []
+        if not title_values and not author_values and not query_values:
+            return results
+        return [
+            result
+            for result in results
+            if self._matches_any_search_value(result, title_values, author_values, query_values, exact)
+        ]
+
+    def _filter_author_ids(
+        self,
+        results: list[SearchResult],
+        author_ids: list[Any],
+    ) -> list[SearchResult]:
+        if not author_ids:
+            return results
+        wanted = {str(value) for value in author_ids}
+        return [result for result in results if result.author_id is not None and str(result.author_id) in wanted]
+
+    def _matches_any_search_value(
+        self,
+        result: SearchResult,
+        titles: list[str],
+        authors: list[str],
+        queries: list[str],
+        exact: bool,
+    ) -> bool:
+        result_title = _norm(_result_title(result))
+        result_author = _norm(result.author) if result.author else None
+
+        for title in titles:
+            needle = _norm(title)
+            if (result_title == needle) if exact else (needle in result_title):
+                return True
+        for author in authors:
+            if result_author is None:
+                continue
+            needle = _norm(author)
+            if (result_author == needle) if exact else (needle in result_author):
+                return True
+        for query in queries:
+            needle = _norm(query)
+            title_match = (result_title == needle) if exact else (needle in result_title)
+            author_match = bool(result_author and ((result_author == needle) if exact else (needle in result_author)))
+            if title_match or author_match:
+                return True
+        return False
 
     def discover_assets(self, book: BookMetadata) -> list[LinkInfo]:
         return self.adapter.discover_links(book)
@@ -310,8 +599,142 @@ class VnThuQuanClient:
     def list_formats(self) -> list[FormatCategory]:
         return self.adapter.list_formats()
 
+    def list_latest(
+        self,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+        page: int = 1,
+    ) -> list[SearchResult]:
+        format_values = self._normalize_formats(formats if formats is not None else format)
+        return self.adapter.list_latest_books(format=format_values, page=page, limit=limit)
+
+    def list_authors(
+        self,
+        initial: str,
+        limit: int | None = None,
+        page: int = 1,
+    ) -> list[Author]:
+        return self.adapter.list_authors(initial=initial, page=page, limit=limit)
+
+    def list_by_title_initial(
+        self,
+        initial: str,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+        page: int = 1,
+    ) -> list[SearchResult]:
+        format_values = self._normalize_formats(formats if formats is not None else format)
+        return self.adapter.list_title_initial_books(initial=initial, format=format_values, page=page, limit=limit)
+
+    def list_most_viewed(
+        self,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+        page: int = 1,
+    ) -> list[SearchResult]:
+        format_values = self._normalize_formats(formats if formats is not None else format)
+        return self.adapter.list_most_viewed_books(format=format_values, page=page, limit=limit)
+
+    def list_five_star(
+        self,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+        page: int = 1,
+    ) -> list[SearchResult]:
+        format_values = self._normalize_formats(formats if formats is not None else format)
+        return self.adapter.list_five_star_books(format=format_values, page=page, limit=limit)
+
+    def list_by_category(
+        self,
+        category: str | int,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+        page: int = 1,
+    ) -> list[SearchResult]:
+        format_values = self._normalize_formats(formats if formats is not None else format)
+        return self.adapter.list_category_books(category=category, format=format_values, page=page, limit=limit)
+
+    def list_by_author(
+        self,
+        author_id: str | int,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = None,
+        page: int = 1,
+    ) -> list[SearchResult]:
+        format_values = self._normalize_formats(formats if formats is not None else format)
+        return self.adapter.list_author_books(author_id=author_id, format=format_values, page=page, limit=limit)
+
     def list_mirrors(self) -> list[str]:
         return list_mirrors()
 
     def list_format_ids(self) -> dict[str, int]:
         return dict(FORMAT_IDS)
+
+    def list_top_by_category(
+        self,
+        category: str | int,
+        source: str = "most-viewed",
+        scan_pages: int = 10,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = 20,
+    ) -> list[SearchResult]:
+        category_info = self.get_category(category)
+        results: list[SearchResult] = []
+        for result in self._scan_ranked_source(source, scan_pages, format, formats):
+            if result.category_id == category_info.id or _norm(result.category_name or "") == _norm(category_info.name):
+                results.append(result)
+                if limit and len(results) >= limit:
+                    break
+        return self._dedupe_results(results)
+
+    def list_top_by_author(
+        self,
+        author_id: str | int | None = None,
+        author: str | None = None,
+        source: str = "most-viewed",
+        scan_pages: int = 10,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+        limit: int | None = 20,
+    ) -> list[SearchResult]:
+        if author_id is None and not author:
+            raise NotFoundError("list_top_by_author requires author_id or author")
+        wanted_id = int(author_id) if author_id is not None and str(author_id).isdigit() else None
+        wanted_author = _norm(author) if author else None
+        results: list[SearchResult] = []
+        for result in self._scan_ranked_source(source, scan_pages, format, formats):
+            id_matches = wanted_id is not None and result.author_id == wanted_id
+            name_matches = wanted_author is not None and _norm(result.author or "") == wanted_author
+            if id_matches or name_matches:
+                results.append(result)
+                if limit and len(results) >= limit:
+                    break
+        return self._dedupe_results(results)
+
+    def _scan_ranked_source(
+        self,
+        source: str,
+        scan_pages: int,
+        format: str | list[str] | None = None,
+        formats: str | list[str] | None = None,
+    ) -> list[SearchResult]:
+        if scan_pages < 1:
+            raise NotFoundError("scan_pages must be >= 1")
+        normalized_source = source.replace("_", "-").casefold().strip()
+        results: list[SearchResult] = []
+        for page in range(1, scan_pages + 1):
+            if normalized_source in {"most-viewed", "popular", "views"}:
+                page_results = self.list_most_viewed(format=format, formats=formats, page=page)
+            elif normalized_source in {"five-star", "5-star", "rated", "rating"}:
+                page_results = self.list_five_star(format=format, formats=formats, page=page)
+            else:
+                raise NotFoundError(f"Unsupported top-list source: {source}")
+            results.extend(page_results)
+        return self._dedupe_results(results)

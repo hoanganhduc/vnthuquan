@@ -11,9 +11,13 @@ Global options
    --quiet
    --debug
    --no-color
+   --print FIELD[,FIELD]
    --config PATH
    --timeout SECONDS
    --retries N
+
+``--json`` is accepted globally and on subcommands, so both
+``vnthuquan --json search ...`` and ``vnthuquan search ... --json`` are valid.
 
 Commands
 --------
@@ -37,6 +41,8 @@ or supplied as a comma-separated list.
    vnthuquan search "Chu Lai" --all --limit 10
    vnthuquan search "Mưa Đỏ" "Thiên Long Bát Bộ" --all --format epub
    vnthuquan search --format epub --page 1 --limit 10
+   vnthuquan search --category 23 --category 26 --format epub --jobs auto
+   vnthuquan search --author "Kim Dung" --format epub --print title,url
    vnthuquan --json search --title "Mưa Đỏ" --title "Thiên Long Bát Bộ" --format epub
 
 Search option summary:
@@ -54,6 +60,8 @@ Search option summary:
    --format FORMAT       Filter by format; repeat or use comma-separated values
    --limit N             Limit displayed results
    --page N              Listing page for category, author ID, and format searches
+   --jobs N|auto         Parallel jobs for independent search requests
+   --print FIELDS        Print fields for scripting
 
 ``show``
 ~~~~~~~~
@@ -75,6 +83,8 @@ Search option summary:
    vnthuquan download --title "..." --format audio --out ~/Downloads --dry-run
    vnthuquan download --url "http://vietnamthuquan.eu/truyen/truyen.aspx?tid=..." --out ~/Downloads --execute
    vnthuquan download --id "2qtqv3m3237n..." --out ~/Downloads --manifest plan.json
+   vnthuquan download --all --category 23 --format epub --limit 20 --manifest queue.json --dry-run
+   vnthuquan download --from-manifest queue.json --execute --jobs auto --progress
 
 Recommended format-specific workflow:
 
@@ -100,7 +110,17 @@ Download option summary:
    --execute          Download and write files
    --strict-verify    Use stricter post-download validation
    --no-failover      Do not retry known mirrors after download failure
-   --manifest PATH    Write a download manifest JSON file
+   --manifest PATH    Write a dry-run queue or executed result manifest JSON file
+   --all              Build a reviewed queue manifest for matched books
+   --from-manifest    Execute or dry-run a queue manifest
+   --jobs N|auto      Parallel queue download jobs
+   --filename-template TEMPLATE
+   --archive-path PATH
+   --no-archive
+   --external-verify
+   --epubcheck
+   --ace
+   --progress
 
 Download output by format:
 
@@ -121,6 +141,7 @@ Download output by format:
    vnthuquan validate ~/Downloads/book.txt --format text
    vnthuquan validate ~/Downloads/book.zip --format audio
    vnthuquan validate ~/Downloads/book.zip --format audio --strict
+   vnthuquan validate ~/Downloads/book.epub --format epub --external
 
 ``list``
 ~~~~~~~~
@@ -159,6 +180,31 @@ many ranked pages are fetched before local category or author filtering.
    vnthuquan mirrors check
    vnthuquan mirrors use http://vnthuquan.net
    vnthuquan mirrors reset
+
+``archive``
+~~~~~~~~~~~
+
+.. code-block:: bash
+
+   vnthuquan archive path
+   vnthuquan archive list --limit 20
+   vnthuquan archive list --limit 20 --print title,format,output_path,sha256
+
+``completion``
+~~~~~~~~~~~~~~
+
+.. code-block:: bash
+
+   vnthuquan completion bash
+   vnthuquan completion zsh
+   vnthuquan completion fish
+
+``doctor``
+~~~~~~~~~~
+
+.. code-block:: bash
+
+   vnthuquan doctor --resources
 
 Exit codes
 ----------

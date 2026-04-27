@@ -483,6 +483,20 @@ def test_plan_download_supports_generated_text(tmp_path) -> None:
     assert plan.asset.kind == "generated_text"
 
 
+def test_plan_download_uses_filename_template(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter()  # type: ignore[assignment]
+
+    plan = client.plan_download(
+        {"title": "Mưa Đỏ"},
+        format="epub",
+        out_dir=str(tmp_path),
+        filename_template="{title} [{format}] [{tid}]",
+    )
+
+    assert Path(plan.output_path).name == "mưa đỏ [epub] [mua-do].epub"
+
+
 def test_plan_download_rejects_format_mismatch(tmp_path) -> None:
     client = VnThuQuanClient(config=Config())
     client.adapter = FakeAdapter()  # type: ignore[assignment]
@@ -511,6 +525,79 @@ def test_download_without_execute_stays_dry_run(tmp_path) -> None:
     assert result.plan.dry_run
     assert result.path is None
     assert not list(tmp_path.iterdir())
+
+
+def test_dry_run_manifest_writes_download_queue(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter()  # type: ignore[assignment]
+    manifest = tmp_path / "queue.json"
+
+    result = client.download(
+        {"title": "Mưa Đỏ"},
+        format="epub",
+        out_dir=str(tmp_path),
+        execute=False,
+        manifest=str(manifest),
+    )
+
+    assert result.manifest_path == str(manifest)
+    assert '"items"' in manifest.read_text(encoding="utf-8")
+    assert '"selector"' in manifest.read_text(encoding="utf-8")
+
+
+def test_build_download_queue_from_category(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter()  # type: ignore[assignment]
+
+    queue = client.build_download_queue(
+        format="epub",
+        out_dir=str(tmp_path),
+        category=23,
+        limit=5,
+    )
+
+    assert len(queue.items) == 1
+    assert queue.items[0].selector == {"url": "http://example.test/truyen/truyen.aspx?tid=mua-do"}
+    assert queue.items[0].format == "epub"
+
+
+def test_download_from_manifest_executes_queue_without_archive(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter(stream_bytes=b"downloaded bytes")  # type: ignore[assignment]
+    queue = client.build_download_queue(format="epub", out_dir=str(tmp_path), category=23)
+    manifest = tmp_path / "queue.json"
+    client.write_queue_manifest(queue, manifest)
+
+    results = client.download_from_manifest(
+        manifest,
+        execute=True,
+        no_verify=True,
+        archive=False,
+    )
+
+    assert len(results) == 1
+    assert results[0].path is not None
+    assert Path(results[0].path).read_bytes() == b"downloaded bytes"
+
+
+def test_download_records_archive(tmp_path) -> None:
+    client = VnThuQuanClient(config=Config())
+    client.adapter = FakeAdapter(stream_bytes=b"downloaded bytes")  # type: ignore[assignment]
+    archive = tmp_path / "downloads.jsonl"
+
+    result = client.download(
+        {"title": "Mưa Đỏ"},
+        format="epub",
+        out_dir=str(tmp_path),
+        execute=True,
+        no_verify=True,
+        archive_path=str(archive),
+    )
+
+    assert result.archive_path == str(archive)
+    text = archive.read_text(encoding="utf-8")
+    assert '"tid": "mua-do"' in text
+    assert '"sha256"' in text
 
 
 def test_audio_download_fails_on_track_byte_mismatch(tmp_path) -> None:

@@ -349,3 +349,50 @@ def test_request_cache_reuses_non_streaming_response() -> None:
     assert first.text == "cached response"
     assert second.text == "cached response"
     assert calls == 1
+
+
+def test_request_cache_persists_non_streaming_response(tmp_path) -> None:
+    cache_path = tmp_path / "cache.json"
+    session = requests.Session()
+    calls = 0
+
+    def request(method, url, timeout, **kwargs):
+        nonlocal calls
+        calls += 1
+        response = requests.Response()
+        response.status_code = 200
+        response.reason = "OK"
+        response.url = url
+        response.headers["Content-Type"] = "text/plain; charset=utf-8"
+        response.encoding = "utf-8"
+        response._content = b"persistent response"
+        return response
+
+    session.request = request  # type: ignore[method-assign]
+    first_adapter = LegacySiteAdapter(
+        mirror="http://example.test",
+        cache_ttl=30,
+        cache_path=cache_path,
+        request_interval=0,
+        session=session,
+    )
+    first_adapter._request("GET", "http://example.test/one")
+
+    second_session = requests.Session()
+
+    def failing_request(method, url, timeout, **kwargs):  # pragma: no cover - should not run
+        raise AssertionError("persistent cache was not used")
+
+    second_session.request = failing_request  # type: ignore[method-assign]
+    second_adapter = LegacySiteAdapter(
+        mirror="http://example.test",
+        cache_ttl=30,
+        cache_path=cache_path,
+        request_interval=0,
+        session=second_session,
+    )
+
+    cached = second_adapter._request("GET", "http://example.test/one")
+
+    assert cached.text == "persistent response"
+    assert calls == 1

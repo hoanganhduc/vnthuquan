@@ -6,7 +6,7 @@
 - Import package: `vnthuquan`
 - CLI command: `vnthuquan`
 - Initial version: `0.1.0`
-- Current package version: `0.1.1`
+- Current package version: `0.1.2.dev0`
 - Python: `>=3.10`
 - License: `GPL-3.0-or-later`
 
@@ -33,15 +33,20 @@ Supported in the first version:
 - config
 - doctor
 - README updates, Sphinx documentation updates, and install scripts
+- persistent download archive
+- reviewed download queue manifests and queue execution
+- script field extraction with `--print`
+- filename templates
+- optional external validators
+- persistent HTTP cache
+- adaptive resource suggestions, parallel search, and parallel queue downloads
+- shell completion setup
 
 Deferred:
 
-- bulk category downloads
 - native per-category/per-author top routes if the site adds them later
-- parallel downloads
-- resource auto-tuning
-- shell completion
 - about command
+- Calibre library integration
 
 ## 0.1.1 Hardening Scope
 
@@ -126,6 +131,11 @@ Titles are user-facing labels, not internal identity.
 - `get_asset_links(book, formats=None)`
 - `get_download_link(book, format="epub")`
 - `download(selector, format="epub", out_dir=None, dry_run=True)`
+- `build_download_queue(format="epub", out_dir=None, query=None, category=None, author_id=None, limit=None, page=1, pages=1)`
+- `download_from_manifest(path, execute=False, jobs=1)`
+- `list_archive(limit=None)`
+- `validate_external(path, validators)`
+- `detect_resources()`
 - `validate(path, format="auto")`
 - `list_categories()`
 - `get_category(category_id_or_slug)`
@@ -144,6 +154,8 @@ MVP commands:
 - `vnthuquan formats`
 - `vnthuquan mirrors`
 - `vnthuquan config`
+- `vnthuquan archive`
+- `vnthuquan completion`
 - `vnthuquan doctor`
 
 Global flags:
@@ -156,6 +168,7 @@ Global flags:
 - `--config PATH`
 - `--timeout SECONDS`
 - `--retries N`
+- `--print FIELD[,FIELD]`
 
 `show` and `download` accept exactly one selector: `--title`, `--url`, or `--id`.
 
@@ -166,6 +179,14 @@ written. Executable download formats are:
 - `pdf`: direct PDF source exposed by the site reader, with a warning when the reader marks download disabled
 - `text`: generated UTF-8 text export assembled from the site's chapter reader
 - `audio`: ZIP bundle containing all discovered MP3 assets plus `manifest.json`
+
+Bulk downloads are a two-step queue workflow:
+
+1. `vnthuquan download --all ... --manifest queue.json --dry-run`
+2. `vnthuquan download --from-manifest queue.json --execute [--jobs auto]`
+
+`download --all` creates queue manifests only. It does not directly download
+multiple books.
 
 ## Link Sharing
 
@@ -340,9 +361,58 @@ JSON schemas to keep stable:
 
 ## Manifest
 
-Single downloads may write a manifest with `--manifest PATH`. The manifest
-contains selector, resolved book, mirror, asset URL, output path, SHA256,
-validation result, timestamp, warnings, and errors.
+Dry-run downloads and `download --all` may write a queue manifest with
+`--manifest PATH`. Executed single downloads may write a result manifest with
+the same flag. Result manifests contain selector, resolved book, mirror, asset
+URL, output path, SHA256, validation result, timestamp, warnings, and errors.
+
+## Archive
+
+Executed downloads are recorded in a JSONL archive unless `--no-archive` is
+used. Archive records include timestamp, TID, URL, title, author, format,
+mirror, output path, SHA256, size, validation status, and skipped status.
+
+Default archive path:
+
+- `~/.local/share/vnthuquan/downloads.jsonl`
+
+Commands:
+
+- `vnthuquan archive path`
+- `vnthuquan archive list --limit 20`
+
+## Parallelism And Resources
+
+Parallel search and queue execution are explicit:
+
+- `vnthuquan search ... --jobs auto`
+- `vnthuquan download --from-manifest queue.json --execute --jobs auto`
+
+`--jobs auto` uses local CPU/memory detection but caps concurrency
+conservatively for the legacy live site. Parallel workers disable persistent
+HTTP cache writes to avoid cache-file races.
+
+Use `vnthuquan doctor --resources` to inspect CPU, memory, suggested search
+jobs, suggested download jobs, and suggested request interval.
+
+## External Validators
+
+Internal validation remains the default. External validators are opt-in:
+
+- `vnthuquan validate book.epub --external`
+- `vnthuquan validate book.epub --epubcheck`
+- `vnthuquan validate book.epub --ace`
+- `vnthuquan download --title ... --format epub --execute --epubcheck`
+
+Missing external executables are reported as validation failures when
+explicitly requested.
+
+## Shell Completion
+
+Shell completion is optional through `argcomplete`:
+
+- install with `pip install "vnthuquan-hoanganhduc[completion]"`
+- inspect setup with `vnthuquan completion bash|zsh|fish`
 
 ## Documentation
 

@@ -7,16 +7,20 @@ import os
 import re
 import tempfile
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
 from .adapter import FORMAT_IDS, LegacySiteAdapter
-from .config import Config, load_config, resolve_download_dir
+from .archive import DownloadArchive, record_from_result, resolve_archive_path
+from .config import Config, default_cache_path, load_config, resolve_download_dir
 from .errors import (
     AmbiguousResultError,
     AssetDiscoveryError,
+    ConfigError,
     DownloadError,
     FilesystemError,
     LiveCheckError,
@@ -25,18 +29,26 @@ from .errors import (
     UnsupportedFormatError,
     ValidationError,
 )
+from .external_validators import validate_external as run_external_validators
 from .mirrors import list_mirrors, normalize_mirror
 from .models import (
     Author,
     BookMetadata,
     Category,
+    DownloadArchiveRecord,
     DownloadPlan,
+    DownloadQueue,
+    DownloadQueueItem,
     DownloadResult,
+    ExternalValidationResult,
     FormatCategory,
     LinkInfo,
     MirrorStatus,
+    ResourceProfile,
     SearchResult,
 )
+from .queue import make_queue, read_queue, write_queue
+from .resources import detect_resources, resolve_jobs
 from .validators import validate_file
 
 EPUB_VALIDATION_CHECKS = [
@@ -105,6 +117,21 @@ def _safe_filename(value: str) -> str:
     cleaned = re.sub(r"[\\/:*?\"<>|]+", " ", value)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned or "book"
+
+
+def _render_filename_template(template: str, book: BookMetadata, fmt: str) -> str:
+    values = {
+        "title": book.title,
+        "author": book.author or "unknown author",
+        "format": fmt,
+        "tid": book.tid,
+    }
+    try:
+        rendered = template.format(**values)
+    except KeyError as exc:
+        allowed = ", ".join(sorted(values))
+        raise ConfigError(f"Unsupported filename template field {exc}; allowed: {allowed}") from exc
+    return _safe_filename(rendered)
 
 
 def _filename_from_url(url: str, fallback: str) -> str:
@@ -181,13 +208,72 @@ class VnThuQuanClient:
         self.adapter = self._make_adapter(selected_mirror)
 
     def _make_adapter(self, mirror: str) -> LegacySiteAdapter:
+        cache_path = self.config.cache_path
+        if self.config.cache_ttl_seconds > 0 and not cache_path:
+            cache_path = str(default_cache_path())
         return LegacySiteAdapter(
             mirror=mirror,
             timeout=self._timeout,
             retries=self._retries,
             cache_ttl=self.config.cache_ttl_seconds,
+            cache_path=cache_path,
             request_interval=self.config.request_interval_seconds,
+            retry_backoff=self.config.retry_backoff_seconds,
+            retry_jitter=self.config.retry_jitter_seconds,
         )
+
+    def _worker_client(self, jobs: int = 1, search: bool = False) -> "VnThuQuanClient":
+        config = self.config
+        if jobs > 1:
+            resources = detect_resources()
+            interval = resources.suggested_request_interval_seconds
+            if search:
+                interval = max(interval, 0.2)
+            config = replace(
+                self.config,
+                request_interval_seconds=max(self.config.request_interval_seconds, interval),
+                cache_ttl_seconds=0.0,
+                cache_path=None,
+            )
+        return VnThuQuanClient(
+            mirror=self.mirror,
+            config=config,
+            timeout=self._timeout,
+            retries=self._retries,
+        )
+
+    def _resolve_search_jobs(self, jobs: str | int | None) -> int:
+        if jobs is None:
+            return 1
+        if isinstance(jobs, str) and jobs.casefold().strip() == "auto":
+            return detect_resources().suggested_search_jobs
+        return max(int(jobs), 1)
+
+    def _collect_parallel(
+        self,
+        values: list[Any],
+        jobs: str | int | None,
+        callback,
+    ) -> list[Any]:
+        resolved_jobs = self._resolve_search_jobs(jobs)
+        if resolved_jobs <= 1 or len(values) <= 1:
+            results: list[Any] = []
+            for value in values:
+                results.extend(callback(self, value))
+            return results
+        ordered: list[list[Any] | None] = [None] * len(values)
+        with ThreadPoolExecutor(max_workers=resolved_jobs) as pool:
+            future_map = {
+                pool.submit(callback, self._worker_client(resolved_jobs, search=True), value): idx
+                for idx, value in enumerate(values)
+            }
+            for future in as_completed(future_map):
+                ordered[future_map[future]] = future.result()
+        results = []
+        for chunk in ordered:
+            if chunk:
+                results.extend(chunk)
+        return results
 
     @property
     def mirror(self) -> str:
@@ -215,6 +301,7 @@ class VnThuQuanClient:
         limit: int | None = None,
         page: int = 1,
         exact: bool = False,
+        jobs: str | int | None = None,
     ) -> list[SearchResult]:
         field = field.replace("-", "_").lower()
         format_values = self._normalize_formats(formats if formats is not None else format)
@@ -246,15 +333,15 @@ class VnThuQuanClient:
         author_id_values = _unique(author_id_values)
 
         if category_values:
-            results: list[SearchResult] = []
-            for category_value in category_values:
-                results.extend(
-                    self.adapter.list_category_books(
-                        category_value,
-                        format=format_values,
-                        page=page,
-                    )
-                )
+            results = self._collect_parallel(
+                category_values,
+                jobs,
+                lambda client, category_value: client.adapter.list_category_books(
+                    category_value,
+                    format=format_values,
+                    page=page,
+                ),
+            )
             results = self._filter_author_ids(results, author_id_values)
             results = self._filter_search_results(
                 results,
@@ -267,15 +354,15 @@ class VnThuQuanClient:
             return results[:limit] if limit else results
 
         if author_id_values:
-            results = []
-            for author_id_value in author_id_values:
-                results.extend(
-                    self.adapter.list_author_books(
-                        author_id_value,
-                        format=format_values,
-                        page=page,
-                    )
-                )
+            results = self._collect_parallel(
+                author_id_values,
+                jobs,
+                lambda client, author_id_value: client.adapter.list_author_books(
+                    author_id_value,
+                    format=format_values,
+                    page=page,
+                ),
+            )
             results = self._filter_search_results(
                 results,
                 titles=title_values,
@@ -291,23 +378,35 @@ class VnThuQuanClient:
                 raise NotFoundError(
                     "Search pagination is only supported for category, author ID, and format listings"
                 )
-            results = []
-            for title in title_values:
-                results.extend(
-                    self.adapter.search(query=title, field="title", format=format_values)
-                )
-            for author in author_values:
-                results.extend(
-                    self.adapter.search(query=author, field="author", format=format_values)
-                )
-            for value in query_values:
-                title_results = self.adapter.search(
-                    query=value, field="title", format=format_values
-                )
-                author_results = self.adapter.search(
-                    query=value, field="author", format=format_values
-                )
-                results.extend([*title_results, *author_results])
+            requests_to_run = (
+                [("title", title) for title in title_values]
+                + [("author", author) for author in author_values]
+                + [("all", value) for value in query_values]
+            )
+            results = self._collect_parallel(
+                requests_to_run,
+                jobs,
+                lambda client, request: (
+                    client.adapter.search(
+                        query=request[1],
+                        field=request[0],
+                        format=format_values,
+                    )
+                    if request[0] != "all"
+                    else [
+                        *client.adapter.search(
+                            query=request[1],
+                            field="title",
+                            format=format_values,
+                        ),
+                        *client.adapter.search(
+                            query=request[1],
+                            field="author",
+                            format=format_values,
+                        ),
+                    ]
+                ),
+            )
             results = self._dedupe_results(results)
             results = self._filter_search_results(
                 results,
@@ -319,9 +418,14 @@ class VnThuQuanClient:
             return results[:limit] if limit else results
 
         if format_values:
-            results = []
-            for format_value in format_values:
-                results.extend(self.adapter.list_format_books(format=format_value, page=page))
+            results = self._collect_parallel(
+                format_values,
+                jobs,
+                lambda client, format_value: client.adapter.list_format_books(
+                    format=format_value,
+                    page=page,
+                ),
+            )
             results = self._dedupe_results(results)
             return results[:limit] if limit else results
 
@@ -341,8 +445,16 @@ class VnThuQuanClient:
         format: str | list[str] | None = None,
         formats: str | list[str] | None = None,
         limit: int | None = None,
+        jobs: str | int | None = None,
     ) -> list[SearchResult]:
-        return self.search(titles=title, exact=exact, format=format, formats=formats, limit=limit)
+        return self.search(
+            titles=title,
+            exact=exact,
+            format=format,
+            formats=formats,
+            limit=limit,
+            jobs=jobs,
+        )
 
     def search_by_author(
         self,
@@ -351,8 +463,16 @@ class VnThuQuanClient:
         format: str | list[str] | None = None,
         formats: str | list[str] | None = None,
         limit: int | None = None,
+        jobs: str | int | None = None,
     ) -> list[SearchResult]:
-        return self.search(authors=author, exact=exact, format=format, formats=formats, limit=limit)
+        return self.search(
+            authors=author,
+            exact=exact,
+            format=format,
+            formats=formats,
+            limit=limit,
+            jobs=jobs,
+        )
 
     def search_by_author_id(
         self,
@@ -364,6 +484,7 @@ class VnThuQuanClient:
         limit: int | None = None,
         page: int = 1,
         exact: bool = False,
+        jobs: str | int | None = None,
     ) -> list[SearchResult]:
         return self.search(
             query,
@@ -374,6 +495,7 @@ class VnThuQuanClient:
             limit=limit,
             page=page,
             exact=exact,
+            jobs=jobs,
         )
 
     def search_by_category(
@@ -386,6 +508,7 @@ class VnThuQuanClient:
         limit: int | None = None,
         page: int = 1,
         exact: bool = False,
+        jobs: str | int | None = None,
     ) -> list[SearchResult]:
         return self.search(
             query,
@@ -396,6 +519,7 @@ class VnThuQuanClient:
             limit=limit,
             page=page,
             exact=exact,
+            jobs=jobs,
         )
 
     def list_by_format(
@@ -413,9 +537,16 @@ class VnThuQuanClient:
         formats: str | list[str] | None = None,
         limit: int | None = None,
         exact: bool = False,
+        jobs: str | int | None = None,
     ) -> list[SearchResult]:
         return self.search(
-            query, field="all", format=format, formats=formats, limit=limit, exact=exact
+            query,
+            field="all",
+            format=format,
+            formats=formats,
+            limit=limit,
+            exact=exact,
+            jobs=jobs,
         )
 
     def show(
@@ -573,6 +704,7 @@ class VnThuQuanClient:
         index: int | None = None,
         exact: bool = False,
         dry_run: bool = True,
+        filename_template: str | None = None,
     ) -> DownloadPlan:
         format = format.lower()
         if format not in DOWNLOAD_EXTENSIONS:
@@ -620,11 +752,13 @@ class VnThuQuanClient:
             if format == "pdf" and asset.restricted_by_site_ui:
                 warnings.append("PDF reader marks direct download as restricted by the site UI")
         output_dir = resolve_download_dir(out_dir, self.config)
-        filename_parts = [book.title]
-        if book.author:
-            filename_parts.append(book.author)
-        filename_parts.append("vnthuquan")
-        filename = _safe_filename(" - ".join(filename_parts)) + DOWNLOAD_EXTENSIONS[format]
+        filename = _render_filename_template(
+            filename_template or self.config.filename_template,
+            book,
+            format,
+        )
+        if Path(filename).suffix.lower() != DOWNLOAD_EXTENSIONS[format]:
+            filename += DOWNLOAD_EXTENSIONS[format]
         output_path = output_dir / filename
         return DownloadPlan(
             selector={key: value for key, value in selector.items() if value},
@@ -655,6 +789,11 @@ class VnThuQuanClient:
         strict_verify: bool = False,
         failover: bool | None = None,
         manifest: str | None = None,
+        archive: bool = True,
+        archive_path: str | None = None,
+        filename_template: str | None = None,
+        external_validators: list[str] | None = None,
+        external_timeout: float = 120.0,
     ) -> DownloadResult:
         dry_run = not execute
         if dry_run:
@@ -665,8 +804,29 @@ class VnThuQuanClient:
                 index=index,
                 exact=exact,
                 dry_run=True,
+                filename_template=filename_template,
             )
-            return DownloadResult(ok=True, plan=plan, warnings=["dry-run: no file downloaded"])
+            if manifest:
+                queue = make_queue(
+                    [
+                        DownloadQueueItem(
+                            selector=plan.selector,
+                            format=plan.format,
+                            out_dir=out_dir,
+                            index=index,
+                            exact=exact,
+                            filename_template=filename_template,
+                        )
+                    ],
+                    source={"kind": "single-download-dry-run"},
+                )
+                write_queue(queue, manifest)
+            return DownloadResult(
+                ok=True,
+                plan=plan,
+                manifest_path=str(Path(manifest).expanduser()) if manifest else None,
+                warnings=["dry-run: no file downloaded"],
+            )
 
         if failover is None:
             failover = not self._mirror_pinned
@@ -688,6 +848,7 @@ class VnThuQuanClient:
                     index=index,
                     exact=exact,
                     dry_run=False,
+                    filename_template=filename_template,
                 )
                 result = self._execute_download_plan(
                     plan,
@@ -697,7 +858,11 @@ class VnThuQuanClient:
                     no_verify=no_verify,
                     strict_verify=strict_verify,
                     manifest=manifest,
+                    external_validators=external_validators,
+                    external_timeout=external_timeout,
                 )
+                if archive:
+                    result.archive_path = str(self.record_download(result, archive_path))
                 if attempted:
                     failed = "; ".join(f"{mirror}: {exc}" for mirror, exc in attempted)
                     result.warnings.append(
@@ -717,6 +882,230 @@ class VnThuQuanClient:
         failed = "; ".join(f"{mirror}: {exc}" for mirror, exc in attempted)
         raise DownloadError(f"Download failed on all attempted mirrors: {failed}")
 
+    def record_download(
+        self,
+        result: DownloadResult,
+        archive_path: str | Path | None = None,
+    ) -> Path:
+        path = resolve_archive_path(archive_path, self.config)
+        archive = DownloadArchive(path)
+        archive.append(record_from_result(result))
+        return path
+
+    def list_archive(
+        self,
+        archive_path: str | Path | None = None,
+        limit: int | None = None,
+    ) -> list[DownloadArchiveRecord]:
+        return DownloadArchive(resolve_archive_path(archive_path, self.config)).read(limit=limit)
+
+    def build_download_queue(
+        self,
+        format: str = "epub",
+        out_dir: str | None = None,
+        query: str | list[str] | None = None,
+        category: str | int | list[str | int] | None = None,
+        author_id: str | int | list[str | int] | None = None,
+        limit: int | None = None,
+        page: int = 1,
+        pages: int = 1,
+        filename_template: str | None = None,
+    ) -> DownloadQueue:
+        if pages < 1:
+            raise NotFoundError("pages must be >= 1")
+        results: list[SearchResult] = []
+        per_page_limit = None if pages > 1 else limit
+        for page_number in range(page, page + pages):
+            results.extend(
+                self.search(
+                    query=query,
+                    field="all",
+                    format=format,
+                    categories=category,
+                    author_ids=author_id,
+                    limit=per_page_limit,
+                    page=page_number,
+                )
+            )
+            if limit and len(results) >= limit:
+                break
+        results = self._dedupe_results(results)
+        if limit:
+            results = results[:limit]
+        items = [
+            DownloadQueueItem(
+                selector={"url": result.url},
+                format=format,
+                out_dir=out_dir,
+                filename_template=filename_template,
+            )
+            for result in results
+        ]
+        return make_queue(
+            items,
+            source={
+                "kind": "download-all",
+                "query": query,
+                "category": category,
+                "author_id": author_id,
+                "format": format,
+                "limit": limit,
+                "page": page,
+                "pages": pages,
+            },
+        )
+
+    def write_queue_manifest(self, queue: DownloadQueue, path: str | Path) -> Path:
+        return write_queue(queue, path)
+
+    def read_queue_manifest(self, path: str | Path) -> DownloadQueue:
+        return read_queue(path)
+
+    def download_from_manifest(
+        self,
+        path: str | Path,
+        execute: bool = False,
+        jobs: str | int | None = 1,
+        overwrite: bool = False,
+        keep_invalid: bool = False,
+        no_verify: bool = False,
+        strict_verify: bool = False,
+        failover: bool | None = None,
+        archive: bool = True,
+        archive_path: str | None = None,
+        external_validators: list[str] | None = None,
+        external_timeout: float = 120.0,
+        progress_callback=None,
+    ) -> list[DownloadResult]:
+        return self.download_queue(
+            self.read_queue_manifest(path),
+            execute=execute,
+            jobs=jobs,
+            overwrite=overwrite,
+            keep_invalid=keep_invalid,
+            no_verify=no_verify,
+            strict_verify=strict_verify,
+            failover=failover,
+            archive=archive,
+            archive_path=archive_path,
+            external_validators=external_validators,
+            external_timeout=external_timeout,
+            progress_callback=progress_callback,
+        )
+
+    def download_queue(
+        self,
+        queue: DownloadQueue,
+        execute: bool = False,
+        jobs: str | int | None = 1,
+        overwrite: bool = False,
+        keep_invalid: bool = False,
+        no_verify: bool = False,
+        strict_verify: bool = False,
+        failover: bool | None = None,
+        archive: bool = True,
+        archive_path: str | None = None,
+        external_validators: list[str] | None = None,
+        external_timeout: float = 120.0,
+        progress_callback=None,
+    ) -> list[DownloadResult]:
+        resolved_jobs = resolve_jobs(jobs, default=1)
+        if not execute:
+            resolved_jobs = 1
+        if resolved_jobs == 1:
+            results = []
+            total = len(queue.items)
+            for idx, item in enumerate(queue.items, start=1):
+                result = self.download(
+                    item.selector,
+                    format=item.format,
+                    out_dir=item.out_dir,
+                    execute=execute,
+                    overwrite=overwrite,
+                    keep_invalid=keep_invalid,
+                    no_verify=no_verify,
+                    strict_verify=strict_verify,
+                    failover=failover,
+                    archive=False,
+                    filename_template=item.filename_template,
+                    index=item.index,
+                    exact=item.exact,
+                    external_validators=external_validators,
+                    external_timeout=external_timeout,
+                )
+                results.append(result)
+                if progress_callback:
+                    progress_callback(idx, total, result)
+        else:
+            resources = detect_resources()
+            worker_config = replace(
+                self.config,
+                request_interval_seconds=max(
+                    self.config.request_interval_seconds,
+                    resources.suggested_request_interval_seconds,
+                ),
+                cache_ttl_seconds=0.0,
+                cache_path=None,
+            )
+
+            def run_item(item: DownloadQueueItem) -> DownloadResult:
+                worker = VnThuQuanClient(
+                    mirror=self.mirror,
+                    config=worker_config,
+                    timeout=self._timeout,
+                    retries=self._retries,
+                )
+                return worker.download(
+                    item.selector,
+                    format=item.format,
+                    out_dir=item.out_dir,
+                    execute=True,
+                    overwrite=overwrite,
+                    keep_invalid=keep_invalid,
+                    no_verify=no_verify,
+                    strict_verify=strict_verify,
+                    failover=failover,
+                    archive=False,
+                    filename_template=item.filename_template,
+                    index=item.index,
+                    exact=item.exact,
+                    external_validators=external_validators,
+                    external_timeout=external_timeout,
+                )
+
+            results = []
+            with ThreadPoolExecutor(max_workers=resolved_jobs) as pool:
+                future_map = {
+                    pool.submit(run_item, item): idx for idx, item in enumerate(queue.items)
+                }
+                ordered: list[DownloadResult | None] = [None] * len(queue.items)
+                for future in as_completed(future_map):
+                    idx = future_map[future]
+                    result = future.result()
+                    ordered[idx] = result
+                    if progress_callback:
+                        progress_callback(
+                            len([item for item in ordered if item is not None]),
+                            len(queue.items),
+                            result,
+                        )
+                results = [result for result in ordered if result is not None]
+        if archive and execute:
+            for result in results:
+                result.archive_path = str(self.record_download(result, archive_path))
+        return results
+
+    def detect_resources(self) -> ResourceProfile:
+        return detect_resources()
+
+    def validate_external(
+        self,
+        path: str | Path,
+        validators: list[str],
+        timeout: float = 120.0,
+    ) -> list[ExternalValidationResult]:
+        return run_external_validators(path, validators, timeout=timeout)
+
     def _execute_download_plan(
         self,
         plan: DownloadPlan,
@@ -726,6 +1115,8 @@ class VnThuQuanClient:
         no_verify: bool,
         strict_verify: bool,
         manifest: str | None,
+        external_validators: list[str] | None,
+        external_timeout: float,
     ) -> DownloadResult:
         output_path = Path(plan.output_path)
         partial_path = Path(plan.partial_path)
@@ -774,7 +1165,22 @@ class VnThuQuanClient:
         os.replace(partial_path, output_path)
         if validation:
             validation.path = str(output_path)
+        external_results = []
+        if external_validators:
+            external_results = self.validate_external(
+                output_path, external_validators, timeout=external_timeout
+            )
+            failed = [item for item in external_results if not item.ok]
+            if failed:
+                if not keep_invalid:
+                    output_path.unlink(missing_ok=True)
+                messages = [item.error or item.stderr or f"{item.name} failed" for item in failed]
+                raise ValidationError("; ".join(messages))
         result = DownloadResult(ok=True, plan=plan, path=str(output_path), validation=validation)
+        if external_results:
+            result.warnings.extend(
+                f"external validator {item.name} passed" for item in external_results if item.ok
+            )
         if manifest:
             result.manifest_path = str(Path(manifest).expanduser())
             self.write_manifest(result, manifest)

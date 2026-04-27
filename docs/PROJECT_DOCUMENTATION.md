@@ -16,6 +16,7 @@ planning, output paths, and validation.
 5. If `--execute` is supplied, stream or generate to `.partial`.
 6. Validate the saved format.
 7. Atomically rename the file after validation.
+8. Record a JSONL archive entry unless archive recording is disabled.
 
 Direct and audio asset downloads use the same adapter session as search and
 listing, so cookies, headers, retries, request pacing, and optional cache
@@ -35,6 +36,10 @@ normal workflow because it exposes the exact asset URL, planned output path,
 warnings, expected size when available, and validation checks before any file is
 written.
 
+Bulk downloads use a queue-first workflow. `download --all` resolves a bounded
+set of results and writes a queue manifest; `download --from-manifest` executes
+that reviewed queue. Parallel queue execution is explicit through `--jobs`.
+
 ## Search Flow
 
 `search` supports one or more titles, authors, author IDs, categories, formats,
@@ -52,6 +57,8 @@ vnthuquan search --title "Mưa Đỏ" --title "Thiên Long Bát Bộ" --format e
 vnthuquan search --author "Kim Dung" --author "Chu Lai" --format epub,pdf --limit 10
 vnthuquan search --category 23 --category 26 --format epub --page 1
 vnthuquan --json search "Chu Lai" --all --format epub
+vnthuquan search --category 23 --category 26 --format epub --jobs auto
+vnthuquan search --author "Kim Dung" --format epub --print title,url
 ```
 
 Python callers can pass either a scalar or list for multi-value selectors:
@@ -104,15 +111,28 @@ errors, including missing PDF EOF markers, HTML-looking text exports, missing
 EPUB TOC/nav entries, demo/sample markers, and audio manifests that do not match
 bundled MP3 files.
 
+External validators are opt-in through `--external`, `--epubcheck`, and `--ace`.
+Missing external executables are reported as validation failures when requested.
+
 Image-format entries are searchable and listable, but they do not yet have an
 executable download path because the live site does not expose one stable
 ebook-level image asset route.
 
+## Archive And Cache
+
+Executed downloads are recorded in `~/.local/share/vnthuquan/downloads.jsonl`
+by default. The archive records TID, URL, title, author, format, output path,
+SHA256, size, validation status, mirror, timestamp, and skipped status.
+
+The HTTP cache is persistent when `cache_ttl_seconds` is greater than zero. By
+default it writes to `~/.cache/vnthuquan/http-cache.json`; parallel workers
+disable persistent cache writes to avoid cache-file races.
+
 ## MVP Boundaries
 
-Bulk downloads, native per-category/per-author top routes, and parallelism are
-deferred. A small TTL cache and request pacing foundation exists for future
-bulk/parallel work.
+Native per-category/per-author top routes and Calibre integration are deferred.
+Top-by-category and top-by-author remain derived scans over global ranked
+pages.
 
 ## Safety
 

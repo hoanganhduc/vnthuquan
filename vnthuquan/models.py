@@ -171,8 +171,79 @@ class DownloadResult:
     skipped: bool = False
     validation: ValidationResult | None = None
     manifest_path: str | None = None
+    archive_path: str | None = None
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return _clean_dict(asdict(self))
+
+
+@dataclass(slots=True)
+class DownloadQueueItem:
+    selector: dict[str, str]
+    format: str = "epub"
+    out_dir: str | None = None
+    index: int | None = None
+    exact: bool = False
+    filename_template: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return _clean_dict(asdict(self))
+
+
+@dataclass(slots=True)
+class DownloadQueue:
+    items: list[DownloadQueueItem]
+    created_at: str
+    version: int = 1
+    source: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return _clean_dict(asdict(self))
+
+
+@dataclass(slots=True)
+class DownloadArchiveRecord:
+    timestamp: str
+    ok: bool
+    tid: str
+    title: str
+    author: str | None
+    format: str
+    url: str
+    mirror: str
+    output_path: str | None
+    sha256: str | None
+    size_bytes: int | None
+    validation_ok: bool | None
+    skipped: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return _clean_dict(asdict(self))
+
+
+@dataclass(slots=True)
+class ExternalValidationResult:
+    name: str
+    command: list[str]
+    ok: bool
+    returncode: int | None = None
+    stdout: str = ""
+    stderr: str = ""
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return _clean_dict(asdict(self))
+
+
+@dataclass(slots=True)
+class ResourceProfile:
+    cpu_count: int
+    memory_total_bytes: int | None
+    suggested_download_jobs: int
+    suggested_search_jobs: int
+    suggested_request_interval_seconds: float
 
     def to_dict(self) -> dict[str, Any]:
         return _clean_dict(asdict(self))

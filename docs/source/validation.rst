@@ -51,6 +51,22 @@ selected structural warnings into errors:
 * Audio ZIP bundles require a valid ``manifest.json`` whose entries match the
   bundled MP3 files.
 
+External validation
+-------------------
+
+External validators are optional and run only when requested:
+
+.. code-block:: bash
+
+   vnthuquan validate book.epub --external
+   vnthuquan validate book.epub --epubcheck
+   vnthuquan validate book.epub --ace
+   vnthuquan download --title "..." --format epub --execute --epubcheck
+
+For EPUB files, ``--external`` selects ``epubcheck`` and Ace by DAISY. Missing
+executables are reported as validation failures because the user explicitly
+requested the external check.
+
 Format limits
 -------------
 

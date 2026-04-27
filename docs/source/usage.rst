@@ -57,6 +57,14 @@ JSON output:
 .. code-block:: bash
 
    vnthuquan --json search --title "Mưa Đỏ" --title "Thiên Long Bát Bộ" --format epub
+   vnthuquan search --author "Kim Dung" --format epub --print title,url
+
+Parallel search is explicit and should be used only for independent live-site
+requests:
+
+.. code-block:: bash
+
+   vnthuquan search --category 23 --category 26 --format epub --jobs auto --limit 20
 
 Python wrapper examples:
 
@@ -109,6 +117,45 @@ Execute download
       --format epub \
       --out ~/Downloads \
       --execute
+
+Filename templates
+------------------
+
+Use ``--filename-template`` to control output names. Supported fields are
+``{title}``, ``{author}``, ``{format}``, and ``{tid}``.
+
+.. code-block:: bash
+
+   vnthuquan download \
+      --title "Lời hiệu triệu của Cthulhu" \
+      --format epub \
+      --out ~/Downloads \
+      --filename-template "{title} - {author} [{tid}]" \
+      --dry-run
+
+Queue manifests
+---------------
+
+Bulk downloads are intentionally split into a review step and an execute step.
+``download --all`` writes a queue manifest only.
+
+.. code-block:: bash
+
+   vnthuquan download \
+      --all \
+      --category 23 \
+      --format epub \
+      --limit 20 \
+      --manifest queue.json \
+      --dry-run
+
+.. code-block:: bash
+
+   vnthuquan download \
+      --from-manifest queue.json \
+      --execute \
+      --jobs auto \
+      --progress
 
 Downloads retry other known mirrors after download or validation failures. Use
 ``--no-failover`` to keep a failing download on the selected mirror. A
@@ -163,6 +210,19 @@ Validate
    vnthuquan validate ~/Downloads/book.txt --format text
    vnthuquan validate ~/Downloads/book.zip --format audio
    vnthuquan validate ~/Downloads/book.zip --format audio --strict
+   vnthuquan validate ~/Downloads/book.epub --format epub --external
+
+Archive
+-------
+
+Executed downloads are recorded in a JSONL archive unless ``--no-archive`` is
+used.
+
+.. code-block:: bash
+
+   vnthuquan archive path
+   vnthuquan archive list --limit 10
+   vnthuquan archive list --limit 10 --print title,format,output_path,sha256
 
 Categories and formats
 ----------------------

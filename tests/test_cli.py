@@ -17,6 +17,8 @@ def test_parser_has_mvp_commands() -> None:
         "formats",
         "mirrors",
         "config",
+        "archive",
+        "completion",
         "doctor",
     ]:
         assert command in help_text
@@ -81,6 +83,28 @@ def test_search_parser_accepts_repeated_and_comma_formats() -> None:
 
     assert args.author == ["Kim Dung", "Chu Lai"]
     assert args.format == ["pdf,epub", "text"]
+
+
+def test_search_parser_accepts_jobs_and_print_fields() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        ["search", "--format", "epub", "--jobs", "auto", "--print", "title,url"]
+    )
+
+    assert args.command == "search"
+    assert args.jobs == "auto"
+    assert args.print_fields == ["title,url"]
+
+
+def test_subcommands_accept_json_after_command() -> None:
+    parser = build_parser()
+
+    search_args = parser.parse_args(["search", "--format", "epub", "--json"])
+    download_args = parser.parse_args(["download", "--title", "Mưa Đỏ", "--json"])
+
+    assert search_args.json
+    assert download_args.json
 
 
 def test_list_parser_accepts_latest() -> None:
@@ -150,6 +174,50 @@ def test_download_parser_accepts_failover_and_strict_verify_flags() -> None:
     assert args.no_failover
 
 
+def test_download_parser_accepts_queue_archive_template_and_external_flags() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "download",
+            "--all",
+            "--category",
+            "23",
+            "--format",
+            "epub",
+            "--manifest",
+            "queue.json",
+            "--filename-template",
+            "{title} [{tid}]",
+            "--jobs",
+            "auto",
+            "--progress",
+            "--epubcheck",
+            "--no-archive",
+        ]
+    )
+
+    assert args.command == "download"
+    assert args.all
+    assert args.category == ["23"]
+    assert args.manifest == "queue.json"
+    assert args.filename_template == "{title} [{tid}]"
+    assert args.jobs == "auto"
+    assert args.progress
+    assert args.epubcheck
+    assert args.no_archive
+
+
+def test_download_parser_accepts_from_manifest() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["download", "--from-manifest", "queue.json", "--execute"])
+
+    assert args.command == "download"
+    assert args.from_manifest == "queue.json"
+    assert args.execute
+
+
 def test_validate_parser_accepts_strict_flag() -> None:
     parser = build_parser()
 
@@ -157,3 +225,25 @@ def test_validate_parser_accepts_strict_flag() -> None:
 
     assert args.command == "validate"
     assert args.strict
+
+
+def test_validate_parser_accepts_external_flags() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(["validate", "book.epub", "--external", "--ace"])
+
+    assert args.external
+    assert args.ace
+
+
+def test_archive_and_completion_commands_parse() -> None:
+    parser = build_parser()
+
+    archive_args = parser.parse_args(["archive", "list", "--limit", "3", "--print", "title,path"])
+    completion_args = parser.parse_args(["completion", "bash"])
+
+    assert archive_args.command == "archive"
+    assert archive_args.archive_command == "list"
+    assert archive_args.limit == 3
+    assert completion_args.command == "completion"
+    assert completion_args.shell == "bash"

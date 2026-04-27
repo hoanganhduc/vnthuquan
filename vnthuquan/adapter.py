@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import base64
+import json
+import os
+import random
 import re
+import tempfile
 import time
 from html import unescape
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import parse_qs, quote, urljoin, urlparse, urlsplit, urlunsplit
 
 import requests
@@ -139,6 +145,15 @@ def _cache_payload_key(value) -> str:
     return repr(value)
 
 
+def _cache_key(method: str, url: str, data_key: str) -> str:
+    return json.dumps([method, url, data_key], separators=(",", ":"), ensure_ascii=False)
+
+
+def _cache_tuple(value: str) -> tuple[str, str, str]:
+    raw = json.loads(value)
+    return str(raw[0]), str(raw[1]), str(raw[2])
+
+
 def _clone_cached_response(cached: _CachedResponse) -> requests.Response:
     response = requests.Response()
     response.status_code = cached.status_code
@@ -167,14 +182,20 @@ class LegacySiteAdapter:
         timeout: float = 30.0,
         retries: int = 2,
         cache_ttl: float = 0.0,
+        cache_path: str | Path | None = None,
         request_interval: float = 0.0,
+        retry_backoff: float = 0.5,
+        retry_jitter: float = 0.1,
         session: requests.Session | None = None,
     ) -> None:
         self.mirror = normalize_mirror(mirror)
         self.timeout = timeout
         self.retries = retries
         self.cache_ttl = max(cache_ttl, 0.0)
+        self.cache_path = Path(cache_path).expanduser() if cache_path else None
         self.request_interval = max(request_interval, 0.0)
+        self.retry_backoff = max(retry_backoff, 0.0)
+        self.retry_jitter = max(retry_jitter, 0.0)
         self._cache: dict[tuple[str, str, str], _CachedResponse] = {}
         self._last_request_at: float | None = None
         self.session = session or requests.Session()
@@ -185,6 +206,7 @@ class LegacySiteAdapter:
             }
         )
         self.session.cookies.set("AspxAutoDetectCookieSupport", "1")
+        self._load_persistent_cache()
 
     def _url(self, path: str) -> str:
         return urljoin(f"{self.mirror}/", path.lstrip("/"))
@@ -199,6 +221,75 @@ class LegacySiteAdapter:
                 time.sleep(remaining)
         self._last_request_at = time.monotonic()
 
+    def _retry_sleep(self, attempt: int) -> None:
+        if self.retry_backoff <= 0 and self.retry_jitter <= 0:
+            return
+        delay = self.retry_backoff * (2**attempt)
+        if self.retry_jitter > 0:
+            delay += random.uniform(0, self.retry_jitter)
+        time.sleep(delay)
+
+    def _load_persistent_cache(self) -> None:
+        if self.cache_ttl <= 0 or self.cache_path is None or not self.cache_path.exists():
+            return
+        try:
+            raw = json.loads(self.cache_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(raw, dict):
+            return
+        now = time.time()
+        for key, item in raw.items():
+            if not isinstance(item, dict):
+                continue
+            stored_at = float(item.get("stored_at", 0.0))
+            if now - stored_at > self.cache_ttl:
+                continue
+            try:
+                cache_key = _cache_tuple(key)
+                self._cache[cache_key] = _CachedResponse(
+                    status_code=int(item["status_code"]),
+                    reason=str(item.get("reason") or ""),
+                    url=str(item["url"]),
+                    headers={str(k): str(v) for k, v in dict(item.get("headers") or {}).items()},
+                    content=base64.b64decode(str(item.get("content") or "")),
+                    encoding=item.get("encoding"),
+                    stored_at=stored_at,
+                )
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+
+    def _write_persistent_cache(self) -> None:
+        if self.cache_ttl <= 0 or self.cache_path is None:
+            return
+        now = time.time()
+        payload = {}
+        for key, cached in self._cache.items():
+            if now - cached.stored_at > self.cache_ttl:
+                continue
+            payload[_cache_key(*key)] = {
+                "status_code": cached.status_code,
+                "reason": cached.reason,
+                "url": cached.url,
+                "headers": cached.headers,
+                "content": base64.b64encode(cached.content).decode("ascii"),
+                "encoding": cached.encoding,
+                "stored_at": cached.stored_at,
+            }
+        try:
+            self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=str(self.cache_path.parent),
+                delete=False,
+            ) as handle:
+                json.dump(payload, handle, ensure_ascii=False)
+                temp_name = handle.name
+            os.replace(temp_name, self.cache_path)
+        except OSError:
+            return
+
     def _request(self, method: str, url: str, **kwargs) -> requests.Response:
         method = method.upper()
         quoted_url = _quote_url(url)
@@ -207,7 +298,7 @@ class LegacySiteAdapter:
         cache_key = (method, quoted_url, data_key)
         if self.cache_ttl > 0 and not stream:
             cached = self._cache.get(cache_key)
-            if cached and time.monotonic() - cached.stored_at <= self.cache_ttl:
+            if cached and time.time() - cached.stored_at <= self.cache_ttl:
                 return _clone_cached_response(cached)
 
         last_error: Exception | None = None
@@ -216,7 +307,7 @@ class LegacySiteAdapter:
                 self._wait_for_rate_limit()
                 response = self.session.request(method, quoted_url, timeout=self.timeout, **kwargs)
                 if response.status_code in {429, 500, 502, 503, 504} and attempt < self.retries:
-                    time.sleep(0.5 * (attempt + 1))
+                    self._retry_sleep(attempt)
                     continue
                 if self.cache_ttl > 0 and not stream and response.ok:
                     self._cache[cache_key] = _CachedResponse(
@@ -226,13 +317,14 @@ class LegacySiteAdapter:
                         headers=dict(response.headers),
                         content=response.content,
                         encoding=response.encoding,
-                        stored_at=time.monotonic(),
+                        stored_at=time.time(),
                     )
+                    self._write_persistent_cache()
                 return response
             except requests.RequestException as exc:
                 last_error = exc
                 if attempt < self.retries:
-                    time.sleep(0.5 * (attempt + 1))
+                    self._retry_sleep(attempt)
                     continue
         raise LiveCheckError(str(last_error)) from last_error
 

@@ -31,7 +31,7 @@ canonical completeness, and links are discovered live instead of guessed.
 
 ## Current Scope
 
-Supported in `0.1.1`:
+Supported in the current development branch:
 
 - search books
 - search by one or more titles, authors, author IDs, categories, formats, or all fields
@@ -46,13 +46,21 @@ Supported in `0.1.1`:
 - check mirrors and basic environment health
 - automatic download failover across known mirrors unless a mirror is pinned
 - opt-in strict validation with `--strict` and `--strict-verify`
-- polite request pacing and optional request caching foundations
+- download queue manifests for reviewed bulk work
+- `download --all` queue creation for category, author ID, query, or format matches
+- `download --from-manifest` queue execution with optional `--jobs auto`
+- persistent download archive in JSONL
+- output filename templates
+- script-friendly `--print` field extraction
+- optional external EPUB validators via `--external`, `--epubcheck`, and `--ace`
+- optional persistent HTTP cache when `cache_ttl_seconds` is enabled
+- exponential retry backoff, polite request pacing, and adaptive resource suggestions
+- optional argcomplete shell completion setup
 
 Deferred:
 
-- bulk category downloads
 - native per-category/per-author top routes if the site adds them later
-- parallel downloads
+- Calibre library integration
 
 ## Installation
 
@@ -156,6 +164,13 @@ Return machine-readable output:
 ```bash
 vnthuquan --json search --title "Mưa Đỏ" --title "Thiên Long Bát Bộ" --format epub
 vnthuquan --json list authors --initial A --page 1
+vnthuquan search --author "Kim Dung" --format epub --print title,url
+```
+
+Use parallel search only for independent live-site requests:
+
+```bash
+vnthuquan search --category 23 --category 26 --format epub --jobs auto --limit 20
 ```
 
 Python wrapper examples:
@@ -206,6 +221,44 @@ vnthuquan download \
   --format epub \
   --out ~/Downloads \
   --execute
+```
+
+Customize output filenames:
+
+```bash
+vnthuquan download \
+  --title "Lời hiệu triệu của Cthulhu" \
+  --format epub \
+  --out ~/Downloads \
+  --filename-template "{title} - {author} [{tid}]" \
+  --dry-run
+```
+
+Create and execute a reviewed download queue:
+
+```bash
+vnthuquan download \
+  --all \
+  --category 23 \
+  --format epub \
+  --limit 20 \
+  --manifest queue.json \
+  --dry-run
+```
+
+```bash
+vnthuquan download \
+  --from-manifest queue.json \
+  --execute \
+  --jobs auto \
+  --progress
+```
+
+Inspect the persistent archive:
+
+```bash
+vnthuquan archive list --limit 10
+vnthuquan archive list --limit 10 --print title,format,output_path,sha256
 ```
 
 Download by format
@@ -260,6 +313,27 @@ vnthuquan validate ~/Downloads/book.pdf --format pdf
 vnthuquan validate ~/Downloads/book.txt --format text
 vnthuquan validate ~/Downloads/book.zip --format audio
 vnthuquan validate ~/Downloads/book.zip --format audio --strict
+vnthuquan validate ~/Downloads/book.epub --format epub --external
+```
+
+Optional external validators are invoked only when requested. `--external` uses
+known validators for the detected format; for EPUB that means `epubcheck` and
+Ace by DAISY when those executables are installed.
+
+Enable persistent cache and tune retry behavior:
+
+```bash
+vnthuquan config set cache_ttl_seconds 300
+vnthuquan config set retry_backoff_seconds 0.5
+vnthuquan config set filename_template "{title} - {author} [{format}] [{tid}]"
+vnthuquan doctor --resources
+```
+
+Shell completion uses the optional `argcomplete` dependency:
+
+```bash
+pip install "vnthuquan-hoanganhduc[completion]"
+eval "$(register-python-argcomplete vnthuquan)"
 ```
 
 ## Safety

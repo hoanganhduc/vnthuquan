@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vnthuquan-hoanganhduc"
-version = "0.1.1"
+version = "0.1.2.dev0"
 authors = [
   { name = "Duc A. Hoang (hoanganhduc)", email = "anhduc.hoang1990@gmail.com" },
 ]
@@ -35,6 +35,9 @@ docs = [
   "myst-parser>=3.0",
   "sphinx-rtd-theme>=3.0",
   "sphinx-autodoc-typehints>=2.2",
+]
+completion = [
+  "argcomplete>=3.5",
 ]
 
 [project.scripts]
